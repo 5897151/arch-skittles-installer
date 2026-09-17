@@ -6,7 +6,8 @@ SKITTLES runs as root, creates an encrypted operating system, modifies firmware 
 
 | Version | Supported |
 | --- | --- |
-| `1.0.0-rc.1` | Yes, for release-candidate security review |
+| `1.0.0` | Yes |
+| `1.0.0-rc.1` | No |
 | older development snapshots | No guaranteed support |
 | `1.0.0` | Not released |
 

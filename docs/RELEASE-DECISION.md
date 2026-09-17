@@ -1,33 +1,30 @@
 # Release Decision — 2026-09-17
 
-## NOT READY FOR v1.0.0
+## APPROVED FOR v1.0.0
 
-Source version remains `1.0.0-rc.1`. No public RC tag or release exists, so the current P0 preflight repair does not require an RC-number increment yet. Do not create a tag until the repaired public SHA has green Ubuntu CI, green current-Arch pacman integration, and the official-ISO `--check --profile=gaming` regression succeeds.
+The owner has approved SKITTLES `1.0.0` as the first stable release. The promotion is release-only: installer runtime behavior remains the validated behavior from public remediation commit `cc62cd73467701bd1c15a1be5b99af68551647ad`, apart from changing the reported source version from `1.0.0-rc.1` to `1.0.0`.
 
-## Verified public baseline
+## Automated evidence
 
-Before this remediation, public `main` was `5b5453bcbc9d6e6ca175adf5c9fa737f050971a1` with installer blob `09ec6f7c310c77e3dd800b9f59c85aeea13ea7cc`. Hosted CI for that baseline passed repository completeness, Bash syntax, ShellCheck 0.9.0, **74/74 Python tests**, repository hygiene, and whitespace.
+Hosted GitHub Actions CI run `35285336084` passed on exact commit `cc62cd73467701bd1c15a1be5b99af68551647ad`. It covered 92/92 Python tests, Bash syntax, ShellCheck for the installer and extracted chroot/doctor scripts, repository hygiene, whitespace validation, current-Arch pacman 7 integration, preserved `DownloadUser` sandbox behavior, and both-profile package resolution.
 
-A real current official Arch ISO then exposed a release-blocking preflight defect: pacman 7 downloaded as its configured low-privilege `DownloadUser` (`alpm` in current Arch packaging), but SKITTLES placed custom DB/cache state under a root-only `0700` `mktemp` parent. Pacman could not traverse into its own `db/sync/download-*` directory and failed opening `core.db.part` before any disk writes.
+The stable promotion adds four focused release-policy/version-consistency tests, bringing local discovery to 96/96 PASS. Exact-source CI must pass again on the stable-promotion commit before the tag is created.
 
-## Current remediation candidate
+## Target-hardware evidence
 
-The remediation keeps pacman's normal downloader privilege separation and sandboxing. The random `/run/skittles.*` parent is `0711` (traverse only), while `db`, `db/local`, and `cache` remain root-owned `0755`. Pacman itself creates/owns its per-download directory. No recursive `chown`, `DisableSandbox*`, or live-ISO pacman configuration mutation is used.
+Physical validation on the supported Intel Core i7-8700K + NVIDIA RTX 3060 Ti gaming-profile system covers clean installation, normal and LTS kernel boots, LUKS unlock, Plasma Wayland, NVIDIA/Vulkan, networking/DNS/nftables/audio/USB, suspend/resume on both kernels, doctor checks, and the documented Steam/Proton/32-bit graphics/GameMode/MangoHud/NTSync runtime path.
 
-Predictable external checks and package synchronization/resolution now complete before disk selection. `--check` exits immediately afterward, before disk enumeration, credentials, or erase confirmation. Failure reporting distinguishes pre-write failure, destructive work already started, and target-installed/extra-wipe failure. Destructive candidates now fail closed when both serial and WWN are absent. GameMode keeps kernel split-lock mitigation enabled (`disable_splitlock=0`).
+A complete `pacman -Syu` transaction and subsequent boots on both kernels passed. No package upgrades were available during that transaction, so this does not demonstrate survival across an actual kernel or NVIDIA package-version transition.
 
-Local Python discovery is **90/90 PASS**. The generated chroot and doctor programs are extracted for independent Bash/ShellCheck validation in CI. A separate current-Arch job runs the actual pacman `-Sy` operation plus minimal/gaming `-Sp` transaction resolution plus per-package `-Si` availability checks with `DownloadUser` and sandboxing intact.
+## Explicitly deferred gates
 
-## Gates still required before the first tagged RC
+The owner intentionally deferred the physical Arch-ISO recovery drill and formal performance benchmark matrix for v1.0.0. They are recorded as `DEFERRED`, never `PASS`.
 
-- Publish the remediation commit and obtain exact-SHA green Ubuntu hosted CI, including ShellCheck on the installer and both generated shell programs.
-- Obtain exact-SHA green current-Arch integration or clearly establish a hosted-container sandbox block without changing production security.
-- On the real current official Arch ISO, run `bash skittles-installer.sh --check --profile=gaming` and prove repository synchronization/package resolution succeeds without disk interaction.
+- Recovery documentation was audited, but unlock/mount/chroot, repair, initramfs, GRUB, LTS recovery boot, and clean teardown were not executed as a formal release drill.
+- No controlled benchmark matrix was executed. No FPS, latency, throughput, power, or other performance gain is claimed, and no benchmark SHA is fabricated.
 
-After those software/preflight gates pass, an actual `v1.0.0-rc.1` tag may be considered because no earlier RC tag/release exists.
+## Fail-closed policy
 
-## Stable gates remain unchanged
+`scripts/check_release_signoff.py` requires the exact key set. Executed mandatory gates must be `PASS`. Only the explicit recovery/performance allowlist may be `DEFERRED`; `NOT TESTED`, `FAIL`, `BLOCKED`, `WARN`, unknown, empty, missing, extra, and malformed values block the release. Performance SHA-256 evidence is mandatory only when performance measurements are `PASS`.
 
-Every mandatory entry in `release-signoff.json` remains `NOT TESTED`. Stable promotion still requires physical clean install, repeated LUKS unlock, both kernels, Plasma Wayland, NVIDIA/Vulkan, networking/firewall/audio/USB, suspend/resume, gaming stack, full update and post-update boots, doctor checks, complete Arch-ISO recovery, performance measurements, and real release artifact/checksum/provenance verification.
-
-The stable release gate remains fail-closed. Missing, renamed, malformed, empty, `FAIL`, `BLOCKED`, `WARN`, or `NOT TESTED` data blocks `v1.0.0`.
+The tag may be created only after the stable-promotion commit passes exact-SHA hosted CI. The release workflow must then rerun validation, build and checksum the expected assets, attest them, pass the stable sign-off checker, and publish the GitHub Release.

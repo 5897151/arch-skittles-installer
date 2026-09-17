@@ -1,28 +1,27 @@
 # Release Process
 
-SKITTLES uses Semantic Versioning. The current source remains `1.0.0-rc.1`; there is no existing tag or GitHub release, so that RC number has not been consumed.
+SKITTLES uses Semantic Versioning. The current source is `1.0.0`, the first stable release.
 
 ## Version and prerequisite agreement
 
-For any release, all of these must agree: `VERSION` in `skittles-installer.sh`, the Git tag without its leading `v`, curated `docs/RELEASE-NOTES-vTAG.md`, and the release asset names. The repository is licensed under Apache-2.0 and the workflow requires the committed non-empty `LICENSE` before either RC or stable publication.
+For any release, `VERSION` in `skittles-installer.sh`, the Git tag without its leading `v`, curated `docs/RELEASE-NOTES-vTAG.md`, and release asset names must agree. The workflow also requires the committed non-empty Apache-2.0 `LICENSE`.
 
-The release job alone receives write/OIDC/attestation permissions. Repository-level workflow permissions remain `contents: read`, checkout does not persist credentials, and first-party Actions are pinned to full commit SHAs.
+The release job alone receives write, OIDC and attestation permissions. Repository-level workflow permissions remain `contents: read`, checkout does not persist credentials, and first-party Actions are pinned to full commit SHAs.
 
 ## Stable release sign-off
 
-`release-signoff.json` is the machine-readable stable gate. It intentionally starts with every physical result as `NOT TESTED`.
-
-For `v1.0.0`, `scripts/check_release_signoff.py` requires:
+`release-signoff.json` is the machine-readable stable gate. For `v1.0.0`, `scripts/check_release_signoff.py` requires:
 
 - schema and release identifiers exactly matching the expected stable format;
-- the complete mandatory key set, with no missing, renamed, or extra key;
-- every mandatory status exactly `PASS` (so `NOT TESTED`, `FAIL`, `BLOCKED`, `WARN`, and empty/unknown values all block);
-- `performance_measurements=PASS` plus `evidence.performance_sha256` matching the actual `docs/PERFORMANCE.md` bytes;
-- stable release notes with the `DRAFT:` marker removed.
+- the complete mandatory key set, with no missing, renamed or extra key;
+- `PASS` for every mandatory executed gate;
+- `DEFERRED` only for the explicit Arch-ISO recovery and formal-performance allowlist;
+- rejection of `NOT TESTED`, `FAIL`, `BLOCKED`, `WARN`, unknown, empty or malformed values;
+- a matching SHA-256 of `docs/PERFORMANCE.md` when performance measurements are `PASS`;
+- a null performance SHA when performance is `DEFERRED`;
+- final stable release notes with no `DRAFT:` marker.
 
-Malformed or missing sign-off data fails closed. RC publication intentionally does not require hardware PASS, because an RC is the artifact used to obtain that hardware evidence; however, the committed Apache-2.0 license and tag/version prerequisites still apply.
-
-When physical testing is completed, update the human-readable tables in `docs/TESTING.md`/`docs/PERFORMANCE.md` and the corresponding machine-readable status together. Do not mark a field PASS from static inspection alone.
+Malformed or missing sign-off data fails closed. `DEFERRED` means the owner intentionally waived a non-mandatory gate for this release; it never means the gate passed. For v1.0.0, recovery execution and formal performance benchmarking are deferred, and no execution or benchmark-gain claim is made for either.
 
 ## Safe pre-tag validation
 
@@ -31,62 +30,55 @@ From a clean checkout:
 ```bash
 bash -n skittles-installer.sh
 shellcheck skittles-installer.sh
+python3 scripts/extract_generated_shell.py CHROOT_SCRIPT > /tmp/skittles-chroot.sh
+python3 scripts/extract_generated_shell.py DOCTOR_SCRIPT > /tmp/skittles-doctor.sh
+bash -n /tmp/skittles-chroot.sh
+bash -n /tmp/skittles-doctor.sh
+shellcheck /tmp/skittles-chroot.sh /tmp/skittles-doctor.sh
 python3 -m unittest discover -s tests -v
 python3 scripts/audit_repository.py
+python3 scripts/check_release_signoff.py release-signoff.json docs/PERFORMANCE.md docs/RELEASE-NOTES-v1.0.0.md
 git diff --check
 ```
 
-CI additionally requires the critical documentation/test/release files to exist, preventing an accidentally reduced test tree from producing a misleading green run. The Ubuntu job also extracts the generated chroot and doctor programs and runs Bash syntax plus ShellCheck on them. A separate `archlinux:latest` container job performs a full current-Arch userspace upgrade and executes the real pacman `DownloadUser` preflight (`-Sy`) plus both-profile transaction resolution (`-Sp`) and per-package repository availability checks (`-Si`). A sandbox restriction imposed by the hosted container must be reported as a CI/environment block; production must not add `DisableSandbox*` to work around CI.
+CI requires the critical documentation/test/release files to exist. Its Ubuntu job validates the installer and generated chroot/doctor programs. Its current-Arch job upgrades the container userspace, executes the real pacman 7 `DownloadUser` preflight with sandboxing intact, resolves both package profiles, checks package availability, and runs current-Arch ShellCheck.
 
 ## Reproducible release assets
 
 The tag workflow builds the end-user bundle with sorted paths, the source commit timestamp as archive mtime, numeric owner/group 0, and `gzip -n`. It writes deterministic `SOURCE_COMMIT`, makes the installer executable, generates `SHA256SUMS`, and immediately runs `sha256sum -c`.
 
-Automated regression tests execute that exact build step twice from the same fixed source identity and require identical tarball SHA-256 values.
+The expected stable assets are:
 
-The tarball deliberately contains:
+```text
+skittles-1.0.0.tar.gz
+skittles-installer-1.0.0.sh
+SHA256SUMS
+```
 
-- `skittles-installer.sh`;
-- `README.md`;
-- `LICENSE`;
-- `CHANGELOG.md`;
-- `SECURITY.md`;
-- `CONTRIBUTING.md`;
-- `release-signoff.json`;
-- `docs/`;
-- `SOURCE_COMMIT`.
+The tarball contains the installer, README, license, changelog, security/contribution documents, sign-off JSON, documentation, and `SOURCE_COMMIT`. Development-only `.github/`, tests, caches and local build output are excluded.
 
-Development-only `.github/`, `tests/`, caches, and local build output are excluded from the public release archive. The repository test suite itself must remain present in GitHub.
+## Stable publication
 
-## Release-candidate procedure
-
-1. Confirm the canonical Apache-2.0 `LICENSE` is present and unchanged except for deliberate license-version decisions.
-2. Ensure the intended RC source is clean, reviewed, and green on hosted CI.
-3. Confirm no immutable tag/release already uses the RC version.
-4. Create the RC tag on the exact green commit; never move an existing public tag.
-5. Let the tag-only workflow rerun validation, build assets, checksum them, attest them, and publish the prerelease.
-6. Download the published assets as an ordinary user and run `sha256sum -c SHA256SUMS`.
-7. Verify provenance against the expected repository/workflow, for example:
+1. Start from a clean `main` containing the validated remediation commit.
+2. Make one release-focused stable-promotion commit.
+3. Push `main` and require both CI jobs to succeed on that exact SHA.
+4. Confirm `v1.0.0` and its GitHub Release do not already exist.
+5. Create annotated tag `v1.0.0` on the exact green commit and push it once. Never move a published release tag silently.
+6. Let `.github/workflows/release.yml` rerun validation, enforce tag/version agreement, run the stable sign-off checker, build and checksum assets, create attestations, and publish the GitHub Release.
+7. Download the three public assets, run `sha256sum -c SHA256SUMS`, and verify both binary artifacts against the expected repository/workflow:
 
 ```bash
-gh attestation verify skittles-VERSION.tar.gz \
+gh attestation verify skittles-1.0.0.tar.gz \
+  -R 5897151/arch-skittles-installer \
+  --signer-workflow 5897151/arch-skittles-installer/.github/workflows/release.yml
+
+gh attestation verify skittles-installer-1.0.0.sh \
   -R 5897151/arch-skittles-installer \
   --signer-workflow 5897151/arch-skittles-installer/.github/workflows/release.yml
 ```
 
-8. Perform all physical validation from those downloaded RC bytes, not a newer workspace.
-9. If code changes are needed after a published RC, increment the RC number instead of moving the tag.
-
-## Stable promotion
-
-Only create `v1.0.0` when every `release-signoff.json` key is PASS, performance evidence is SHA-bound, stable notes are no longer draft, exact-source hosted CI is green, and the owner accepts the release evidence. The stable workflow will independently re-run the fail-closed validator.
-
-After publishing stable, independently download and re-verify checksums and attestation. Provenance proves build identity, not correctness; source review and hardware/recovery evidence remain distinct.
-
-## Repository hygiene
-
-Before tags, review the current tree and available history for credentials, Wi-Fi secrets, private keys, personal machine data, generated junk, unexpected binaries, or transfer artifacts. CI's hygiene scanner covers common current-tree patterns but cannot prove every possible secret or replace GitHub secret scanning/push protection.
+Provenance proves build identity, not runtime correctness. It does not convert deferred recovery or performance work into PASS.
 
 ## Upgrade policy
 
-SKITTLES is a destructive fresh installer. Never rerun it as an upgrade or repair mechanism. Update an installed system with normal Arch full upgrades (`pacman -Syu`) and use `docs/RECOVERY.md` when recovery is required.
+SKITTLES is a destructive fresh installer. Never rerun it as an upgrade or repair mechanism. Update an installed system with normal Arch full upgrades (`pacman -Syu`) and use [Recovery](RECOVERY.md) when recovery is required.

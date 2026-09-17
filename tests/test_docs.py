@@ -32,14 +32,14 @@ class DocumentationConsistencyTests(unittest.TestCase):
                 self.assertTrue(path.is_file())
                 self.assertGreater(len(path.read_text(encoding="utf-8").splitlines()), 20)
 
-    def test_readme_release_candidate_version_matches_installer(self):
+    def test_readme_stable_version_matches_installer(self):
         proc = subprocess.run(
             ["bash", str(SCRIPT), "--version"], cwd=ROOT, text=True, capture_output=True, check=True
         )
         version = proc.stdout.strip()
         text = README.read_text(encoding="utf-8")
         self.assertIn(f"`{version}`", text)
-        self.assertIn("release candidate, not stable", text)
+        self.assertIn("the first stable release", text)
 
     def test_readme_mentions_every_long_cli_option(self):
         help_text = subprocess.run(

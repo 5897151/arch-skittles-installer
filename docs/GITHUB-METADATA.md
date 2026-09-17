@@ -2,6 +2,8 @@
 
 Public metadata for `5897151/arch-skittles-installer`.
 
+Current stable version: `1.0.0`.
+
 ## Repository name
 
 `arch-skittles-installer`

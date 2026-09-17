@@ -16,7 +16,7 @@ body:
     attributes:
       label: SKITTLES version
       description: Output of `bash skittles-installer.sh --version` or `VERSION=` from `/etc/skittles-release`.
-      placeholder: 1.0.0-rc.1
+      placeholder: 1.0.0
     validations:
       required: true
 

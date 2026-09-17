@@ -8,6 +8,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 META = (ROOT / "docs/GITHUB-METADATA.md").read_text(encoding="utf-8")
+README = (ROOT / "README.md").read_text(encoding="utf-8")
+INSTALLER = (ROOT / "skittles-installer.sh").read_text(encoding="utf-8")
 RC_NOTES = (ROOT / "docs/RELEASE-NOTES-v1.0.0-rc.1.md").read_text(encoding="utf-8")
 STABLE_NOTES = (ROOT / "docs/RELEASE-NOTES-v1.0.0.md").read_text(encoding="utf-8")
 WORKFLOW = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
@@ -54,10 +56,16 @@ class ReleaseMetadataTests(unittest.TestCase):
         self.assertIn("NOT TESTED", RC_NOTES)
         self.assertIn("Apache License 2.0", RC_NOTES)
 
-    def test_stable_notes_are_explicitly_draft_gated(self):
+    def test_stable_notes_are_final_and_draft_marker_is_enforced(self):
         self.assertIn("# SKITTLES v1.0.0", STABLE_NOTES)
-        self.assertIn("DRAFT:", STABLE_NOTES)
+        self.assertNotIn("DRAFT:", STABLE_NOTES)
         self.assertIn("DRAFT:", SIGNOFF_CHECK.read_text(encoding="utf-8"))
+
+    def test_stable_version_agrees_across_authoritative_metadata(self):
+        self.assertIn("readonly VERSION=1.0.0\n", INSTALLER)
+        self.assertIn("Current source version: **`1.0.0`**", README)
+        self.assertTrue(STABLE_NOTES.startswith("# SKITTLES v1.0.0"))
+        self.assertIn("Current stable version: `1.0.0`", META)
 
     def test_release_workflow_uses_tag_specific_notes_and_fail_closed_stable_gate(self):
         self.assertIn('notes_file="docs/RELEASE-NOTES-${GITHUB_REF_NAME}.md"', WORKFLOW)
@@ -71,7 +79,7 @@ class ReleaseMetadataTests(unittest.TestCase):
         for key in data["required"]:
             data["required"][key] = "PASS"
         performance = directory / "docs/PERFORMANCE.md"
-        performance.parent.mkdir(parents=True)
+        performance.parent.mkdir(parents=True, exist_ok=True)
         performance.write_text("# Performance evidence\n\nMeasured on release hardware.\n", encoding="utf-8")
         data["evidence"]["performance_file"] = "docs/PERFORMANCE.md"
         data["evidence"]["performance_sha256"] = hashlib.sha256(performance.read_bytes()).hexdigest()
@@ -89,13 +97,30 @@ class ReleaseMetadataTests(unittest.TestCase):
             capture_output=True,
         )
 
-    def test_repository_signoff_defaults_fail_closed(self):
+    def test_repository_signoff_records_pass_and_narrow_deferrals(self):
         data = json.loads(SIGNOFF.read_text(encoding="utf-8"))
         self.assertEqual(data["schema"], 1)
         self.assertEqual(data["release"], "1.0.0")
         self.assertTrue(data["required"])
-        self.assertEqual(set(data["required"].values()), {"NOT TESTED"})
+        deferred = {key for key, value in data["required"].items() if value == "DEFERRED"}
+        self.assertEqual(
+            deferred,
+            {
+                "recovery_unlock_mount_chroot",
+                "recovery_reinstall_kernels_nvidia",
+                "recovery_rebuild_initramfs",
+                "recovery_repair_grub",
+                "recovery_boot_linux_lts",
+                "recovery_clean_unmount_close",
+                "performance_measurements",
+            },
+        )
+        self.assertEqual(set(data["required"].values()), {"PASS", "DEFERRED"})
         self.assertIsNone(data["evidence"]["performance_sha256"])
+
+    def test_repository_signoff_passes_with_approved_deferrals(self):
+        proc = self._run_signoff(SIGNOFF, ROOT / "docs/PERFORMANCE.md", ROOT / "docs/RELEASE-NOTES-v1.0.0.md")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
 
     def test_stable_gate_accepts_valid_all_pass_fixture(self):
         with tempfile.TemporaryDirectory() as td:
@@ -118,8 +143,20 @@ class ReleaseMetadataTests(unittest.TestCase):
             signoff.write_text(json.dumps(data), encoding="utf-8")
             self.assertNotEqual(self._run_signoff(signoff, performance, notes).returncode, 0)
 
+    def test_stable_gate_accepts_deferred_only_for_explicit_allowlist(self):
+        with tempfile.TemporaryDirectory() as td:
+            signoff, performance, notes, data = self._valid_signoff_fixture(Path(td))
+            data["required"]["performance_measurements"] = "DEFERRED"
+            data["evidence"]["performance_sha256"] = None
+            signoff.write_text(json.dumps(data), encoding="utf-8")
+            self.assertEqual(self._run_signoff(signoff, performance, notes).returncode, 0)
+
+            data["required"]["linux_boot"] = "DEFERRED"
+            signoff.write_text(json.dumps(data), encoding="utf-8")
+            self.assertNotEqual(self._run_signoff(signoff, performance, notes).returncode, 0)
+
     def test_stable_gate_rejects_blocked_warn_and_empty_statuses(self):
-        for status in ("BLOCKED", "WARN", ""):
+        for status in ("BLOCKED", "WARN", "", "UNKNOWN"):
             with self.subTest(status=status), tempfile.TemporaryDirectory() as td:
                 signoff, performance, notes, data = self._valid_signoff_fixture(Path(td))
                 data["required"]["recovery_repair_grub"] = status
@@ -130,6 +167,11 @@ class ReleaseMetadataTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             signoff, performance, notes, data = self._valid_signoff_fixture(Path(td))
             del data["required"]["nvidia_linux_lts"]
+            signoff.write_text(json.dumps(data), encoding="utf-8")
+            self.assertNotEqual(self._run_signoff(signoff, performance, notes).returncode, 0)
+
+            signoff, performance, notes, data = self._valid_signoff_fixture(Path(td))
+            del data["evidence"]["performance_sha256"]
             signoff.write_text(json.dumps(data), encoding="utf-8")
             self.assertNotEqual(self._run_signoff(signoff, performance, notes).returncode, 0)
 
@@ -154,6 +196,17 @@ class ReleaseMetadataTests(unittest.TestCase):
             signoff, performance, notes, _ = self._valid_signoff_fixture(root)
             performance.write_text("changed after sign-off\n", encoding="utf-8")
             self.assertNotEqual(self._run_signoff(signoff, performance, notes).returncode, 0)
+
+    def test_stable_gate_requires_sha_only_when_performance_passes(self):
+        with tempfile.TemporaryDirectory() as td:
+            signoff, performance, notes, data = self._valid_signoff_fixture(Path(td))
+            data["evidence"]["performance_sha256"] = None
+            signoff.write_text(json.dumps(data), encoding="utf-8")
+            self.assertNotEqual(self._run_signoff(signoff, performance, notes).returncode, 0)
+
+            data["required"]["performance_measurements"] = "DEFERRED"
+            signoff.write_text(json.dumps(data), encoding="utf-8")
+            self.assertEqual(self._run_signoff(signoff, performance, notes).returncode, 0)
 
     def test_stable_gate_rejects_draft_release_notes(self):
         with tempfile.TemporaryDirectory() as td:

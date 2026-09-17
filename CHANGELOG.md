@@ -4,6 +4,8 @@ SKITTLES follows Semantic Versioning. This changelog is structured after Keep a 
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-17
+
 ### Fixed
 
 - Put mandatory LUKS mapping and `zswap.enabled=0` arguments in `GRUB_CMDLINE_LINUX` so normal and recovery/single Linux entries inherit the same encrypted-root policy; physical target-hardware validation exposed the recovery-entry gap.
@@ -25,7 +27,8 @@ SKITTLES follows Semantic Versioning. This changelog is structured after Keep a 
 
 ### Release engineering
 
-- Replaced weak stable-release marker greps with a fail-closed machine-readable sign-off validator: every mandatory physical/recovery/performance key must be present and `PASS`, performance evidence is SHA-256-bound, and draft stable notes are rejected.
+- Replaced weak stable-release marker greps with a fail-closed machine-readable sign-off validator: mandatory executed gates must be `PASS`; only the explicit recovery/performance allowlist may be `DEFERRED`; performance evidence is SHA-256-bound whenever measurements are `PASS`; and draft stable notes are rejected.
+- Promoted the validated remediation line to the first stable release without changing installer runtime behavior beyond the version constant.
 - Added executable negative release-gate fixtures, tag/license prerequisite tests, byte-reproducible release-asset testing, and a current-tree repository hygiene guard.
 - Expanded adversarial disk-plan/input regression coverage, including disappearing/replaced/busy disks, signal-phase reporting, persistent identifiers, cleanup failures, and second-instance locking.
 - Updated recovery resolver guidance to rely on current `arch-chroot` resolver/API-filesystem handling instead of a manual `/mnt/run` copy workaround.

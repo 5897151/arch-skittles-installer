@@ -53,7 +53,7 @@ These controls reduce accidental or simple state-change risk; they are not a for
 
 ## Boot-chain gap
 
-Secure Boot is explicitly unsupported in `1.0.0-rc.1`. GRUB is installed both as `EFI/SKITTLES/grubx64.efi` and the removable fallback path. Neither path is signed by SKITTLES. LUKS therefore protects confidentiality of locked root data, but it does not authenticate the code that asks for the passphrase.
+Secure Boot is explicitly unsupported in `1.0.0`. GRUB is installed both as `EFI/SKITTLES/grubx64.efi` and the removable fallback path. Neither path is signed by SKITTLES. LUKS therefore protects confidentiality of locked root data, but it does not authenticate the code that asks for the passphrase.
 
 ## Update/supply-chain model
 

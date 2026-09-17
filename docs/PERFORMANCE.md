@@ -1,6 +1,6 @@
 # Performance Policy
 
-SKITTLES ships only performance behavior that has a clear purpose and bounded downside. `1.0.0-rc.1` does **not** yet have target-hardware benchmark results, so no FPS, latency, throughput, or power improvement is claimed. Real measurements are a stable-release gate.
+SKITTLES ships only performance behavior that has a clear purpose and bounded downside. Formal benchmarking was explicitly deferred for `1.0.0`, so no FPS, latency, throughput, power, or other benchmark-based improvement is claimed.
 
 | Optimization | Default | Why | Evidence | Risk / tradeoff |
 | --- | --- | --- | --- | --- |
@@ -21,7 +21,7 @@ This approach does not disable thermal controls or firmware power limits and doe
 
 ## Measurement plan
 
-Before `v1.0.0`, measure on the supported i7-8700K + RTX 3060 Ti system from the exact RC artifact. Every row remains **NOT TESTED** until it is run on that physical machine.
+If this optional matrix is executed later, measure on the supported i7-8700K + RTX 3060 Ti system from an exact published artifact. Every row remains **NOT TESTED** until it is run on that physical machine.
 
 | Case | Controlled comparison | Required evidence / guardrail | Current result |
 | --- | --- | --- | --- |
@@ -45,7 +45,7 @@ Every result set must identify the commit SHA, installer version, kernel, NVIDIA
 
 ## Repeatable release measurement procedure
 
-Use the exact downloaded RC and keep the machine configuration unchanged between comparison runs. Record the RC tag/source commit, Arch kernel, NVIDIA package version, game/benchmark build, resolution, graphics preset, display refresh mode, GameMode state, and approximate room conditions.
+Use an exact downloaded release artifact and keep the machine configuration unchanged between comparison runs. Record the tag/source commit, Arch kernel, NVIDIA package version, game/benchmark build, resolution, graphics preset, display refresh mode, GameMode state, and approximate room conditions.
 
 For each representative workload:
 
@@ -88,14 +88,14 @@ If the chosen title has no repeatable built-in benchmark or controlled scene, do
 
 ## Current measurements
 
-**NOT TESTED on release hardware.** No numeric performance improvement is claimed for `1.0.0-rc.1` yet.
+**DEFERRED for v1.0.0.** No formal benchmark matrix was executed and no numeric performance improvement is claimed.
 
 ## Release measurement record template
 
 Complete this section on the physical release machine; do not replace raw run data with a score.
 
 ```text
-RC tag / SOURCE_COMMIT:
+Release tag / SOURCE_COMMIT:
 Arch ISO date:
 Kernel:
 NVIDIA packages / driver:
@@ -121,4 +121,4 @@ Long-run stability: PASS | FAIL
 Conclusion (including variance/downsides):
 ```
 
-After all required measurements are complete and reviewed, set `performance_measurements` to `PASS` in `release-signoff.json` and record the SHA-256 of this completed file in `evidence.performance_sha256`. Until then it remains `NOT TESTED` and no numeric performance benefit is claimed.
+If all measurements are completed and reviewed for a later release, set `performance_measurements` to `PASS` in `release-signoff.json` and record the SHA-256 of this completed file in `evidence.performance_sha256`. For v1.0.0 it remains `DEFERRED`, the SHA is `null`, and no numeric performance benefit is claimed.

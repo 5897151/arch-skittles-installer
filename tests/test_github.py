@@ -92,7 +92,7 @@ class GitHubInfrastructureTests(unittest.TestCase):
         self.assertTrue(license_path.exists(), "Apache-2.0 LICENSE must be committed")
         self.assertIn("Version 2.0, January 2004", license_path.read_text(encoding="utf-8"))
         env = os.environ.copy()
-        env["GITHUB_REF_NAME"] = "v1.0.0-rc.1"
+        env["GITHUB_REF_NAME"] = "v1.0.0"
         with tempfile.TemporaryDirectory() as td:
             fixture = Path(td)
             shutil.copy2(ROOT / "skittles-installer.sh", fixture / "skittles-installer.sh")
@@ -126,7 +126,7 @@ class GitHubInfrastructureTests(unittest.TestCase):
         self.assertTrue(license_path.exists(), "Apache-2.0 LICENSE must be committed")
         env = os.environ.copy()
         env.update(
-            GITHUB_REF_NAME="v1.0.0-rc.1",
+            GITHUB_REF_NAME="v1.0.0",
             GITHUB_SHA="0123456789abcdef0123456789abcdef01234567",
         )
         hashes = []
@@ -137,11 +137,11 @@ class GitHubInfrastructureTests(unittest.TestCase):
                     text=True, capture_output=True,
                 )
                 self.assertEqual(proc.returncode, 0, proc.stderr)
-                archive = dist / "skittles-1.0.0-rc.1.tar.gz"
+                archive = dist / "skittles-1.0.0.tar.gz"
                 hashes.append(hashlib.sha256(archive.read_bytes()).hexdigest())
                 with tarfile.open(archive, "r:gz") as tf:
                     names = tf.getnames()
-                    root = "skittles-1.0.0-rc.1"
+                    root = "skittles-1.0.0"
                     required = {
                         f"{root}/skittles-installer.sh",
                         f"{root}/README.md",

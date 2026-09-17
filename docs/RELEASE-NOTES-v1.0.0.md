@@ -1,13 +1,12 @@
-<!-- DRAFT: remove this marker only after every stable release gate is recorded PASS. -->
 # SKITTLES v1.0.0
 
 ## Highlights
 
-SKITTLES `v1.0.0` is the first stable release of a hardware-scoped, destructive fresh-install Arch Linux installer for one i7-8700K + RTX 3060 Ti KDE/Wayland desktop. It is designed around explicit disk authorization, LUKS2 encrypted root, Linux + Linux LTS recovery, conservative network/privacy defaults, current Arch NVIDIA open-module handling, and auditable local diagnostics.
+SKITTLES `v1.0.0` is the first stable release of a hardware-scoped, destructive fresh-install Arch Linux installer for one Intel Core i7-8700K + NVIDIA RTX 3060 Ti KDE Plasma/Wayland desktop. It combines explicit disk authorization, LUKS2 encrypted ext4 root, `linux` plus `linux-lts`, conservative network/privacy defaults, Arch's NVIDIA open modules, local diagnostics, and an optional gaming stack.
 
-## Current RC remediation
+The final remediation line fixed current pacman 7 `DownloadUser` access without disabling sandboxing, moved package synchronization/resolution before any storage interaction, tightened destructive failure reporting and disk identity handling, and corrected physical-validation regressions in GRUB recovery arguments, nftables diagnostics, and privileged mmap-ASLR checks.
 
-A real current official Arch ISO exposed a pre-destructive pacman 7 failure because pacman downloads as its configured `DownloadUser` while SKITTLES had placed custom DB/cache state beneath a root-only `0700` temporary parent. The remediation grants traverse-only access to that random parent, preserves pacman `DownloadUser` and sandboxing, runs package sync/resolution before any disk interaction, and makes pre-write failure reporting explicit. No tagged RC exists yet, so the source version remains `1.0.0-rc.1`.
+Validated remediation commit `cc62cd73467701bd1c15a1be5b99af68551647ad` passed hosted CI run `35285336084` with 92/92 Python tests, Bash and ShellCheck validation of the installer and generated scripts, repository hygiene, current-Arch pacman integration, preserved downloader sandbox policy, and both-profile package resolution. Four focused stable-policy/version tests bring the promotion suite to 96 tests. The final stable-promotion commit is independently validated by CI before tagging.
 
 ## Hardware target
 
@@ -32,6 +31,8 @@ Other hardware is unsupported, even if the script can technically be adapted.
 - Extra wipe-only disks are touched only after the target OS installs successfully.
 - Cleanup only releases mounts/mappings owned by the installer.
 
+SKITTLES is a destructive fresh installer. It is not an updater, repair tool, migration tool, or generic Arch installer.
+
 ## Security & privacy
 
 - LUKS2 with Argon2id encrypted ext4 root.
@@ -46,19 +47,25 @@ These choices improve privacy but do not provide anonymity. DNS-over-TLS, Tor an
 
 ## Gaming
 
-The gaming profile adds Steam, 32-bit NVIDIA/Vulkan libraries, GameMode, MangoHud and NTSync. GameMode is an on-demand game-session layer with explicit I/O priority; split-lock mitigation remains enabled (`disable_splitlock=0`). SKITTLES does not force a permanent maximum-performance governor, CPU/GPU overclock, fixed GPU clocks, alternate gaming kernel, or global mitigation disable.
+The gaming profile adds Steam, 32-bit NVIDIA/Vulkan libraries, GameMode, MangoHud and NTSync. GameMode is an on-demand game-session layer; split-lock mitigation remains enabled (`disable_splitlock=0`). SKITTLES does not force a permanent maximum-performance governor, overclock CPU/GPU hardware, force fixed GPU clocks, install an alternate gaming kernel, or disable mitigations globally.
+
+Target-hardware validation covered the technical Steam/Proton runtime path, 32-bit NVIDIA/Vulkan, GameMode, MangoHud and NTSync on the supported desktop. Formal performance benchmarking was deferred. No benchmark-based FPS, latency, throughput, power, or other performance gain is claimed.
 
 ## Recovery
 
-`linux-lts` is installed alongside `linux`. The release ships detailed Arch-ISO recovery instructions covering safe device identification, LUKS unlock, mounts, chroot networking, package/NVIDIA reinstall, initramfs rebuild, GRUB repair, LTS selection, journal inspection, LUKS-header backup and clean teardown.
+`linux-lts` is installed alongside `linux`. The release includes detailed Arch-ISO recovery instructions covering safe device identification, LUKS unlock, mounts, chroot networking, package/NVIDIA reinstall, initramfs rebuild, GRUB repair, LTS selection, journal inspection, LUKS-header backup and clean teardown.
+
+The documentation was audited, but the physical Arch-ISO recovery drill was explicitly deferred for v1.0.0. No recovery-execution PASS is claimed.
+
+## Validation scope
+
+Physical validation on the documented i7-8700K + RTX 3060 Ti target covered clean installation, both kernels, LUKS unlock, Plasma Wayland, NVIDIA/Vulkan, networking/DNS/nftables/audio/USB, suspend/resume, doctor checks, and the gaming runtime path. A complete `pacman -Syu` transaction followed by boots on both kernels passed; no package upgrades were available, so an actual kernel/NVIDIA package-version transition was not demonstrated.
+
+The machine-readable sign-off records executed mandatory gates as `PASS`. Only the explicit recovery-drill and formal-performance allowlist is `DEFERRED`; no unperformed deferred gate is labeled PASS.
 
 ## License
 
 SKITTLES is licensed under the Apache License 2.0.
-
-## Release gating
-
-Stable publication requires the complete machine-readable hardware/recovery/performance sign-off to be `PASS`, SHA-bound performance evidence, green exact-source CI, and removal of this document's `DRAFT:` marker. Automated/static validation alone is not a substitute for those physical gates.
 
 ## Known limitations
 
@@ -69,6 +76,7 @@ Stable publication requires the complete machine-readable hardware/recovery/perf
 - Logical zero wiping does not guarantee physical sanitization of SSD/NVMe spare/remapped NAND.
 - Arch is a rolling distribution; future package changes can require manual intervention or a SKITTLES maintenance release.
 - LUKS protects a locked powered-off volume, not an already unlocked compromised session.
+- Recovery-ISO execution and formal performance benchmarking are deferred as described above.
 
 ## Verification
 
@@ -86,14 +94,14 @@ Verify integrity:
 sha256sum -c SHA256SUMS
 ```
 
-Verify GitHub artifact provenance against the publishing repository:
+Verify GitHub artifact provenance against the publishing repository and workflow:
 
 ```bash
 gh attestation verify skittles-1.0.0.tar.gz -R 5897151/arch-skittles-installer --signer-workflow 5897151/arch-skittles-installer/.github/workflows/release.yml
 gh attestation verify skittles-installer-1.0.0.sh -R 5897151/arch-skittles-installer --signer-workflow 5897151/arch-skittles-installer/.github/workflows/release.yml
 ```
 
-Checksums detect mismatched bytes. GitHub provenance ties an artifact to the recorded repository/workflow/commit. Source review and release-test evidence are separate requirements.
+Checksums detect mismatched bytes. GitHub provenance ties an artifact to the recorded repository/workflow/commit. Source review and release-test evidence remain separate requirements.
 
 ## Upgrade note
 

@@ -5,7 +5,7 @@
 
 DISK="" EFI_PART="" ROOT_PART=""
 readonly CRYPT_NAME=skittles-root MNT=/mnt EFI_MNT=/mnt/boot
-readonly VERSION=1.0.0-rc.1
+readonly VERSION=1.0.0
 readonly TIMEZONE=Europe/Luxembourg LOCALE=en_US.UTF-8 KEYMAP=us HOSTNAME=arch
 
 WIPE_MODE=zero
