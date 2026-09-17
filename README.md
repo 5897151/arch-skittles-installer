@@ -1,18 +1,27 @@
-# SKITTLES
+# SKITTLES 🌈
 
 [![CI](https://github.com/5897151/arch-skittles-installer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/5897151/arch-skittles-installer/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+![Status: 1.0.0-rc.1](https://img.shields.io/badge/status-1.0.0--rc.1-orange)
 
-> Safety-first, encrypted Arch Linux fresh installer for one specific Intel Core i7-8700K + NVIDIA RTX 3060 Ti KDE Plasma/Wayland desktop.
+> A safety-first, encrypted Arch Linux fresh installer for one deliberately narrow gaming desktop: Intel Core i7-8700K + NVIDIA RTX 3060 Ti, KDE Plasma/Wayland, LUKS2/ext4, dual kernels, privacy-conscious networking, and an optional Steam/Proton stack.
 
-| Release gate | Current status |
+| Validation gate | Current status |
 | --- | --- |
-| **PUBLIC HOSTED BASELINE** | **PASS — 74/74** on `5b5453bcbc9d6e6ca175adf5c9fa737f050971a1` |
-| **CURRENT REMEDIATION LOCAL SUITE** | **90/90 PASS** |
-| **CURRENT-ARCH PACMAN INTEGRATION** | **REQUIRED BY CI; hosted result pending publication** |
-| **PHYSICAL RELEASE-HARDWARE VALIDATION** | **PENDING / NOT TESTED** |
-| **STABLE v1.0.0** | **NOT YET RELEASED** |
+| **HOSTED CI** | **REQUIRED ON `main`** — the live badge above is authoritative |
+| **CURRENT-ARCH PACMAN 7 PREFLIGHT** | **PASS** on the published RC baseline with `DownloadUser` and sandbox policy preserved |
+| **TARGET-HARDWARE FRESH INSTALL** | **PASS** — i7-8700K + RTX 3060 Ti, gaming profile |
+| **`linux` + `linux-lts` BOOT** | **PASS** — `7.2.6-arch2-1` + `6.18.52-1-lts` during physical validation |
+| **NVIDIA / WAYLAND / VULKAN** | **PASS** on both supported kernels |
+| **SUSPEND / RESUME** | **PASS** on both supported kernels; NVIDIA/DNS remained healthy after resume |
+| **NETWORK / DNS / NFTABLES / AUDIO** | **PASS** on the target machine |
+| **STEAM / PROTON / GAMEMODE / NTSYNC** | **PASS — technical runtime path** (Half-Life process on NVIDIA, GameMode active, NTSync loaded) |
+| **`pacman -Syu` + BOTH-KERNEL REBOOT** | **PASS** for the transaction/reboot path; no package upgrades were available |
+| **ARCH-ISO RECOVERY DRILL** | **DEFERRED / NOT CLAIMED** |
+| **FORMAL PERFORMANCE MATRIX** | **DEFERRED / NOT CLAIMED** — no benchmark gain claims are made |
+| **STABLE v1.0.0** | **NOT RELEASED** |
 
-Current source version: **`1.0.0-rc.1`** — release candidate, not stable. Public baseline CI is green. A real current Arch ISO exposed a pre-destructive pacman 7 `DownloadUser` permission defect; the current remediation fixes that path and adds a real Arch pacman CI job, but the corrected ISO preflight still must be re-run before another destructive installation.
+Current source version: **`1.0.0-rc.1`** — release candidate, not stable. Hosted CI includes Ubuntu validation plus a current-Arch pacman integration path. Real target-hardware validation now covers the normal boot, graphics, suspend, network/firewall/audio, update-transaction, and gaming-runtime paths listed above; deferred recovery/performance gates remain explicitly unclaimed.
 
 > [!WARNING]
 > **SKITTLES is destructive. Selected disks are erased.** It is a fresh-install tool—not an updater, repair utility, migration tool, or generic Arch installer. Never rerun it to update or repair an installed system.
@@ -113,7 +122,7 @@ SKITTLES does not disable CPU vulnerability mitigations, overclock CPU/GPU hardw
 
 Normal desktop use leaves CPU policy adaptive. The gaming profile lets GameMode request the `performance` governor only for participating game sessions and restore the original policy afterward. GameMode is explicitly configured **not** to disable the kernel split-lock mitigation. Zram is bounded at half RAM up to 4 GiB; ext4 keeps normal relatime behavior.
 
-Performance claims remain blocked until the documented target-hardware measurements are completed. See [Performance validation](docs/PERFORMANCE.md).
+Formal performance benchmarking is deferred for this RC. SKITTLES makes no unmeasured FPS, latency, power, or throughput improvement claims. The measurement matrix remains documented in [Performance validation](docs/PERFORMANCE.md) for anyone who wants to execute it later.
 
 ## Safe inspection
 
@@ -201,26 +210,28 @@ Read [Arch Linux news](https://archlinux.org/news/) before upgrades. Never use S
 
 ## Automated validation versus release validation
 
-The exact public baseline `5b5453bcbc9d6e6ca175adf5c9fa737f050971a1` passed hosted CI with repository completeness, Bash syntax, ShellCheck **0.9.0**, **74/74 Python tests**, repository hygiene, and whitespace validation.
+Public commit `09493d3b256070b2a38b21e45332a8e3e73b3c0a` passed hosted CI run `35240917626`, including the Ubuntu job and the current-Arch integration job. The Arch job exercises the real pacman 7 `DownloadUser` preflight with the live sandbox policy preserved, plus minimal/gaming package resolution and generated-script ShellCheck.
 
-The current remediation tree expands local Python coverage to **90/90 PASS**, adds Bash/ShellCheck validation of the generated chroot/doctor programs, and adds a separate current-Arch container job that executes the real pacman `DownloadUser` preflight plus minimal and gaming `-Sp` transaction resolution plus per-package `-Si` availability checks. That Arch-specific job is not claimed PASS until it runs on the published remediation SHA.
+The automated suite covers CLI/profile behavior, generated configuration, destructive-operation mocks, plan/identity guards, signal/failure-phase behavior, credential transport, release prerequisites, fail-closed stable gating, deterministic release assets, repository hygiene, documentation consistency, recovery guidance, and current-Arch package integration. The physical-validation fixes add regression coverage for GRUB recovery command lines, current Arch's `nftables.service` oneshot semantics, and root-only mmap-ASLR diagnostics.
 
-The suite covers CLI/profile behavior, generated configuration, destructive-operation mocks, plan/identity guards, signal/failure-phase behavior, credential transport, release prerequisites, fail-closed stable gating, deterministic release assets, repository hygiene, documentation consistency, and recovery guidance.
+Real target-hardware evidence now exists for a clean gaming-profile install, both kernels, Plasma Wayland, NVIDIA/Vulkan, suspend/resume on both kernels, Ethernet/DNS/nftables, PipeWire, zram, GameMode/NTSync, the Steam/Proton runtime path, and a complete `pacman -Syu` transaction followed by successful boots on both kernels. The observed `pacman -Syu` had no package upgrades available, so it does **not** prove migration across an actual kernel/NVIDIA version change.
 
-That is **automated evidence only**. `release-signoff.json` intentionally remains `NOT TESTED` for the physical i7-8700K + RTX 3060 Ti gates. See [Testing and release sign-off](docs/TESTING.md) and [Release decision](docs/RELEASE-DECISION.md).
+`release-signoff.json` remains fail-closed for gates that were not executed. In particular, the Arch-ISO recovery drill and formal performance benchmark matrix are deferred and are **not** represented as PASS. Stable `v1.0.0` therefore remains unreleased. See [Testing and release sign-off](docs/TESTING.md) and [Release decision](docs/RELEASE-DECISION.md).
 
 ## Recovery model
 
 Both `linux` and `linux-lts` are installed. The recovery guide covers Arch-ISO device identification, LUKS unlock, mounting/chroot, kernel/NVIDIA reinstall, initramfs rebuild, GRUB repair, logs, LUKS-header backup, clean teardown, and LTS recovery boot.
 
-The procedure is documented but **has not yet completed its required physical release drill**. See [Recovery](docs/RECOVERY.md).
+The procedure is documented, but the owner deferred the physical Arch-ISO recovery drill for this RC. No recovery-execution PASS is claimed. See [Recovery](docs/RECOVERY.md).
 
 ## Known limitations
 
 - Only the i7-8700K + RTX 3060 Ti target is supported.
 - Secure Boot is unsupported for this release and must be disabled.
 - Hibernation is not configured.
-- Physical clean-install, both-kernel, NVIDIA/Wayland, suspend/resume, networking/audio/gaming/update, recovery, and performance sign-offs remain pending.
+- Clean install, both-kernel boot, NVIDIA/Wayland/Vulkan, suspend/resume, networking/DNS/firewall/audio, update-transaction/reboot, and the technical Steam/Proton/GameMode/NTSync runtime path have been exercised on the supported hardware.
+- The Arch-ISO recovery drill and formal performance benchmark matrix are deferred and are not claimed as PASS.
+- The observed `pacman -Syu` had no package upgrades available, so survival across an actual kernel/NVIDIA package-version transition remains unproven.
 - DNS is not encrypted by SKITTLES.
 - Logical SSD wiping is not certified NAND sanitization.
 - Arch is rolling release software; future package behavior can invalidate assumptions and requires revalidation.

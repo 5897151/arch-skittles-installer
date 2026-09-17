@@ -4,8 +4,11 @@ SKITTLES follows Semantic Versioning. This changelog is structured after Keep a 
 
 ## [Unreleased]
 
-### Fixed (local regression coverage; hardware validation pending)
+### Fixed
 
+- Put mandatory LUKS mapping and `zswap.enabled=0` arguments in `GRUB_CMDLINE_LINUX` so normal and recovery/single Linux entries inherit the same encrypted-root policy; physical target-hardware validation exposed the recovery-entry gap.
+- Update `skittles-doctor` for current Arch's `nftables.service` oneshot semantics: verify boot enablement/last load plus the live SKITTLES ruleset instead of requiring the service to remain `active`.
+- Treat root-only `vm.mmap_rnd_bits` / `vm.mmap_rnd_compat_bits` reads as privileged doctor checks so a normal-user diagnostic run reports an informational skip rather than a false failure; root doctor still verifies the configured values.
 - Fix current pacman 7 preflight on the official Arch ISO: the root-created `/run/skittles.*` workspace now grants traverse-only access (`0711`) so pacman's configured `DownloadUser` can reach the download directory that pacman itself creates/owns, without recursively changing ownership or disabling the downloader sandbox.
 - Move package synchronization/resolution before disk selection and make `--check` exit before any disk enumeration, credentials, or erase confirmation.
 - Track whether destructive writes have actually started so preflight failures no longer claim a wipe/install is irreversible; post-write and post-install-extra-wipe failures report distinct states.
@@ -36,8 +39,10 @@ SKITTLES follows Semantic Versioning. This changelog is structured after Keep a 
 
 ### Known Issues
 
-- Real i7-8700K + RTX 3060 Ti release-candidate installation, suspend/resume, recovery, gaming, update, and both-kernel sign-off are not yet recorded.
-- Performance changes have no target-hardware benchmark results yet.
+- Real i7-8700K + RTX 3060 Ti validation now covers the clean gaming-profile install, both kernels, Plasma/Wayland, NVIDIA/Vulkan, networking/DNS/firewall/audio, suspend/resume on both kernels, GameMode/NTSync, the Steam/Proton technical runtime path, and a complete `pacman -Syu` transaction followed by both-kernel reboot validation.
+- The observed `pacman -Syu` had no package upgrades available, so survival across an actual kernel/NVIDIA version transition remains unproven.
+- The Arch-ISO recovery drill is deferred and is not claimed as PASS.
+- Formal target-hardware performance benchmarking is deferred; no performance-gain claim is made.
 
 ## [1.0.0-rc.1] - Unreleased
 

@@ -190,6 +190,9 @@ prepare_preflight_pacman_workspace() {
 }
 
 valid_username() {
+    # Bash regex ranges are locale-sensitive. Force ASCII semantics so names such
+    # as "usér" cannot match [a-z] under a UTF-8 collation locale.
+    local LC_ALL=C
     [[ $1 =~ ^[a-z_][a-z0-9_-]*$ && $1 != root && ${#1} -le 32 ]]
 }
 
@@ -698,6 +701,8 @@ umask 022
 export LC_ALL=C HISTFILE=/dev/null
 ulimit -c 0
 LUKS_UUID=$1 ROOT_UUID=$2 USERNAME=$3 TIMEZONE=$4 LOCALE=$5 KEYMAP=$6 HOSTNAME=$7 ALLOW_DISCARDS=$8 PROFILE=$9 VERSION=${10}
+# grub-mkconfig emits root=UUID=... itself; retain ROOT_UUID only as a checked cross-boundary invariant.
+[[ $ROOT_UUID =~ ^[[:xdigit:]-]{36}$ ]]
 IFS= read -r -d '' USER_PASSWORD
 IFS= read -r -d '' ROOT_PASSWORD
 trap 'unset USER_PASSWORD ROOT_PASSWORD' EXIT
@@ -895,7 +900,9 @@ done
 (( kernels == 2 ))
 mkinitcpio -P
 
-cmdline="rd.luks.name=${LUKS_UUID}=skittles-root root=UUID=${ROOT_UUID} rw zswap.enabled=0"
+# GRUB generates root=UUID=... rw for each Linux menu entry. Keep only
+# mandatory arguments that must also reach recovery/single entries here.
+cmdline="rd.luks.name=${LUKS_UUID}=skittles-root zswap.enabled=0"
 if (( ALLOW_DISCARDS )); then
     cmdline+=" rd.luks.options=${LUKS_UUID}=discard"
     systemctl enable fstrim.timer
@@ -907,8 +914,8 @@ GRUB_DEFAULT=0
 GRUB_TIMEOUT=5
 GRUB_TIMEOUT_STYLE=menu
 GRUB_DISTRIBUTOR="Arch"
-GRUB_CMDLINE_LINUX_DEFAULT="$cmdline"
-GRUB_CMDLINE_LINUX=""
+GRUB_CMDLINE_LINUX_DEFAULT=""
+GRUB_CMDLINE_LINUX="$cmdline"
 GRUB_DISABLE_OS_PROBER=true
 EOF
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=SKITTLES --recheck
@@ -952,6 +959,16 @@ check_line() {
     local label=$1 file=$2 line=$3
     check "$label" grep -Fqx -- "$line" "$file"
 }
+check_privileged_line() {
+    local label=$1 file=$2 line=$3
+    if [[ -r $file ]]; then
+        check_line "$label" "$file" "$line"
+    elif (( EUID != 0 )); then
+        info "$label check skipped without root; run sudo skittles-doctor"
+    else
+        fail "$label readable"
+    fi
+}
 check_mount_option() {
     local label=$1 target=$2 option=$3 options
     options=$(findmnt -n -o OPTIONS "$target" 2>/dev/null || true)
@@ -971,9 +988,21 @@ elif [[ ${XDG_SESSION_TYPE:-} == x11 ]]; then fail "graphical session is Wayland
 else info 'Wayland check skipped outside a graphical session'; fi
 
 section 'BOOT / SECURITY'
-for unit in NetworkManager systemd-resolved nftables systemd-timesyncd sddm; do
+for unit in NetworkManager systemd-resolved systemd-timesyncd sddm; do
     check "$unit service active" systemctl is-active --quiet "$unit"
 done
+# Current Arch ships nftables.service as Type=oneshot with RemainAfterExit=no.
+# Successful completion therefore becomes inactive/dead while the kernel rules remain.
+check 'nftables service enabled for boot' systemctl is-enabled --quiet nftables.service
+if nft_result=$(systemctl show nftables.service -p Result --value 2>/dev/null); then
+    if [[ $nft_result == success ]]; then
+        pass 'nftables last load succeeded'
+    else
+        fail "nftables last load succeeded (found ${nft_result:-empty})"
+    fi
+else
+    fail 'nftables last load status readable'
+fi
 secure_boot_var=/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c
 if [[ -r $secure_boot_var ]]; then
     secure_boot=$(od -An -t u1 -j 4 -N 1 "$secure_boot_var" 2>/dev/null | tr -d '[:space:]')
@@ -1002,8 +1031,8 @@ check_line 'kexec image loading disabled' /proc/sys/kernel/kexec_load_disabled '
 check_line 'setuid core dumps disabled' /proc/sys/fs/suid_dumpable '0'
 check_line 'protected hardlinks enabled' /proc/sys/fs/protected_hardlinks '1'
 check_line 'protected symlinks enabled' /proc/sys/fs/protected_symlinks '1'
-check_line '64-bit mmap ASLR entropy pinned' /proc/sys/vm/mmap_rnd_bits '32'
-check_line '32-bit mmap ASLR entropy pinned' /proc/sys/vm/mmap_rnd_compat_bits '16'
+check_privileged_line '64-bit mmap ASLR entropy pinned' /proc/sys/vm/mmap_rnd_bits '32'
+check_privileged_line '32-bit mmap ASLR entropy pinned' /proc/sys/vm/mmap_rnd_compat_bits '16'
 check_line 'IPv4 redirects disabled (all)' /proc/sys/net/ipv4/conf/all/accept_redirects '0'
 check_line 'IPv4 redirects disabled (default)' /proc/sys/net/ipv4/conf/default/accept_redirects '0'
 check_line 'IPv6 redirects disabled (all)' /proc/sys/net/ipv6/conf/all/accept_redirects '0'

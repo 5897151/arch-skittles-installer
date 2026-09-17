@@ -113,6 +113,8 @@ class ProfileTests(unittest.TestCase):
 
 class PureShellFunctionTests(unittest.TestCase):
     def test_valid_username(self):
+        body = TEXT.split("valid_username() {", 1)[1].split("\n}", 1)[0]
+        self.assertIn("local LC_ALL=C", body)
         valid = ["alice", "_service", "a1", "user-name", "user_name"]
         invalid = ["root", "Auser", "1user", "has space", "", "x" * 33, "usér", "user;id", "user*"]
         for username in valid:
@@ -619,10 +621,27 @@ class GeneratedConfigurationTests(unittest.TestCase):
         self.assertEqual(resolve["DNSOverTLS"], "no")
         self.assertEqual(resolve["FallbackDNS"], "")
 
-    def test_boot_command_line_disables_zswap_for_grub_managed_kernels(self):
-        self.assertIn('cmdline="rd.luks.name=${LUKS_UUID}=skittles-root root=UUID=${ROOT_UUID} rw zswap.enabled=0"', self.chroot)
-        self.assertIn('GRUB_CMDLINE_LINUX_DEFAULT="$cmdline"', self.chroot)
+    def test_boot_command_line_applies_mandatory_args_to_all_grub_linux_entries(self):
+        self.assertIn('cmdline="rd.luks.name=${LUKS_UUID}=skittles-root zswap.enabled=0"', self.chroot)
+        self.assertIn('GRUB_CMDLINE_LINUX_DEFAULT=""', self.chroot)
+        self.assertIn('GRUB_CMDLINE_LINUX="$cmdline"', self.chroot)
+        self.assertNotIn('root=UUID=${ROOT_UUID}', self.chroot.split('cmdline="', 1)[1].split('"', 1)[0])
         self.assertIn("grub-mkconfig -o /boot/grub/grub.cfg", self.chroot)
+
+    def test_doctor_handles_current_arch_nftables_oneshot_semantics(self):
+        boot = self.doctor.split("section 'BOOT / SECURITY'\n", 1)[1].split("\nsecure_boot_var=", 1)[0]
+        self.assertNotIn("systemd-resolved nftables systemd-timesyncd", boot)
+        self.assertIn("nftables service enabled for boot", boot)
+        self.assertIn("systemctl is-enabled --quiet nftables.service", boot)
+        self.assertIn("nftables last load succeeded", boot)
+        self.assertIn("systemctl show nftables.service -p Result --value", boot)
+
+    def test_doctor_skips_root_only_mmap_reads_without_false_failure(self):
+        self.assertIn("check_privileged_line '64-bit mmap ASLR entropy pinned' /proc/sys/vm/mmap_rnd_bits '32'", self.doctor)
+        self.assertIn("check_privileged_line '32-bit mmap ASLR entropy pinned' /proc/sys/vm/mmap_rnd_compat_bits '16'", self.doctor)
+        helper = self.doctor.split("check_privileged_line() {", 1)[1].split("\n}", 1)[0]
+        self.assertIn("EUID != 0", helper)
+        self.assertIn("check skipped without root", helper)
 
     def test_zram_policy_is_bounded_and_not_over_tuned(self):
         cfg = heredoc("ZRAM")
