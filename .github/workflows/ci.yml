@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Show static-analysis version
+        run: shellcheck --version
+
+      - name: Bash syntax
+        run: bash -n skittles-installer.sh
+
+      - name: ShellCheck
+        run: shellcheck skittles-installer.sh
+
+      - name: Unit and generated-config tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Whitespace sanity
+        run: git diff --check
