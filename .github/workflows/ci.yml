@@ -89,4 +89,4 @@ jobs:
           shellcheck --version
           python3 scripts/extract_generated_shell.py CHROOT_SCRIPT > /tmp/skittles-chroot.sh
           python3 scripts/extract_generated_shell.py DOCTOR_SCRIPT > /tmp/skittles-doctor.sh
-          shellcheck skittles-installer.sh tests/test_arch_pacman_preflight.sh /tmp/skittles-chroot.sh /tmp/skittles-doctor.sh
+          shellcheck -x skittles-installer.sh tests/test_arch_pacman_preflight.sh /tmp/skittles-chroot.sh /tmp/skittles-doctor.sh
