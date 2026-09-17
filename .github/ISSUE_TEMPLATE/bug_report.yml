@@ -1,0 +1,108 @@
+name: Bug report
+description: Report a reproducible SKITTLES installer or installed-system problem.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. **Remove passwords, Wi-Fi secrets, drive serial numbers, personal hostnames, and other sensitive identifiers before posting logs.**
+
+        Do not post `/etc/NetworkManager/system-connections/*`. For a security vulnerability—especially a destructive-drive-selection bypass—follow `SECURITY.md` instead of filing public exploit details.
+
+  - type: input
+    id: version
+    attributes:
+      label: SKITTLES version
+      description: Output of `bash skittles-installer.sh --version` or `VERSION=` from `/etc/skittles-release`.
+      placeholder: 1.0.0-rc.1
+    validations:
+      required: true
+
+  - type: input
+    id: arch_iso
+    attributes:
+      label: Arch ISO date
+      description: The ISO release date/name used for installation or recovery.
+      placeholder: archlinux-YYYY.MM.DD-x86_64.iso
+    validations:
+      required: true
+
+  - type: dropdown
+    id: profile
+    attributes:
+      label: Profile
+      options:
+        - minimal
+        - gaming
+    validations:
+      required: true
+
+  - type: input
+    id: kernel
+    attributes:
+      label: Running kernel
+      description: Output of `uname -r`, if the installed system boots.
+      placeholder: 6.x.y-arch1-1
+    validations:
+      required: false
+
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU
+      description: Exact GPU model; the supported target is RTX 3060 Ti. Remove serial/UUID data.
+      placeholder: NVIDIA GeForce RTX 3060 Ti
+    validations:
+      required: true
+
+  - type: dropdown
+    id: destructive_stage
+    attributes:
+      label: When did the failure happen?
+      options:
+        - Before any destructive operation
+        - During target-disk wipe/partition/install
+        - After target installation, before optional extra-drive wipe
+        - During optional extra-drive wipe
+        - After first boot
+        - During a later update/recovery operation
+    validations:
+      required: true
+
+  - type: textarea
+    id: exact_error
+    attributes:
+      label: Exact error and steps to reproduce
+      description: Include the exact command/action and error text. Redact sensitive identifiers.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Relevant skittles-doctor output
+      description: Paste only relevant output from `skittles-doctor` and/or `sudo skittles-doctor`; redact identifiers first.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Firmware/boot state, network type, recent package changes, or other details that materially affect reproduction.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed passwords, Wi-Fi secrets, drive serial numbers, personal hostnames, and other sensitive identifiers.
+          required: true
+        - label: I did not include files from `/etc/NetworkManager/system-connections/`.
+          required: true

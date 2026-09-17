@@ -56,9 +56,11 @@ class GitHubInfrastructureTests(unittest.TestCase):
 
     def test_release_bundle_contains_required_public_files(self):
         text = RELEASE.read_text(encoding="utf-8")
-        for item in ["skittles-installer.sh", "README.md", "LICENSE", "CHANGELOG.md", "SECURITY.md", "docs", "tests"]:
+        for item in ["skittles-installer.sh", "README.md", "LICENSE", "CHANGELOG.md", "SECURITY.md", "docs"]:
             with self.subTest(item=item):
                 self.assertIn(item, text)
+        self.assertIn('chmod 0755 "dist/${bundle}/skittles-installer.sh"', text)
+        self.assertNotIn('cp -R docs tests', text)
 
     def test_bug_template_contains_release_and_redaction_fields(self):
         text = (ROOT / ".github/ISSUE_TEMPLATE/bug_report.yml").read_text(encoding="utf-8")

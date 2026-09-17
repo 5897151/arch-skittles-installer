@@ -73,11 +73,11 @@ Verify integrity from the downloaded release directory:
 sha256sum -c SHA256SUMS
 ```
 
-When GitHub artifact attestations are published, replace `OWNER` with the actual repository owner and verify provenance:
+When GitHub artifact attestations are published, verify provenance against the publishing repository:
 
 ```bash
-gh attestation verify skittles-1.0.0-rc.1.tar.gz -R OWNER/skittles
-gh attestation verify skittles-installer-1.0.0-rc.1.sh -R OWNER/skittles
+gh attestation verify skittles-1.0.0-rc.1.tar.gz -R 5897151/arch-skittles-installer --signer-workflow 5897151/arch-skittles-installer/.github/workflows/release.yml
+gh attestation verify skittles-installer-1.0.0-rc.1.sh -R 5897151/arch-skittles-installer --signer-workflow 5897151/arch-skittles-installer/.github/workflows/release.yml
 ```
 
 A matching checksum proves the bytes match `SHA256SUMS`; an attestation ties the artifact to the recorded repository/workflow/commit. Neither proves the installer is safe—review the source before running a root-level destructive installer.

@@ -74,11 +74,11 @@ Verify integrity:
 sha256sum -c SHA256SUMS
 ```
 
-Verify GitHub artifact provenance after replacing `OWNER` with the actual repository owner:
+Verify GitHub artifact provenance against the publishing repository:
 
 ```bash
-gh attestation verify skittles-1.0.0.tar.gz -R OWNER/skittles
-gh attestation verify skittles-installer-1.0.0.sh -R OWNER/skittles
+gh attestation verify skittles-1.0.0.tar.gz -R 5897151/arch-skittles-installer --signer-workflow 5897151/arch-skittles-installer/.github/workflows/release.yml
+gh attestation verify skittles-installer-1.0.0.sh -R 5897151/arch-skittles-installer --signer-workflow 5897151/arch-skittles-installer/.github/workflows/release.yml
 ```
 
 Checksums detect mismatched bytes. GitHub provenance ties an artifact to the recorded repository/workflow/commit. Source review and release-test evidence are separate requirements.

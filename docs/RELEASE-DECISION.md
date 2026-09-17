@@ -2,7 +2,7 @@
 
 ## NOT READY FOR v1.0.0
 
-The repository is in release-candidate state at `1.0.0-rc.1`. Automated local checks are healthy, but stable release gates that require owner action, GitHub execution, and the target physical machine remain open.
+The repository is in release-candidate state at `1.0.0-rc.1`. Automated local checks are healthy and GitHub-hosted Bash/ShellCheck have executed successfully, but the hosted test gate is not yet green because the public tree is missing release-infrastructure files. Owner license selection and target-hardware validation also remain open.
 
 ## Completed locally
 
@@ -19,10 +19,17 @@ The repository is in release-candidate state at `1.0.0-rc.1`. Automated local ch
 
 The imported repository does not include the project's complete pre-audit history, so the local history scan cannot prove older upstream history is clean.
 
-## Tooling / CI blockers
+## Hosted GitHub CI status
 
-- ShellCheck is not installed in this local runner and local network retrieval was unavailable, so local ShellCheck execution remains blocked. The committed GitHub CI workflow runs ShellCheck on `ubuntu-24.04` without root, but that workflow has not executed because this workspace has no configured Git remote.
-- No GitHub CI run has therefore been observed as PASS for this commit.
+GitHub Actions run `35165611372` tested commit `18fb447a098d99d3eb3a8255688f1fe0c72c46ad` on Ubuntu 24.04.
+
+- Bash syntax: **PASS**.
+- ShellCheck 0.9.0: **PASS**.
+- Hosted token permissions: `contents: read`, `metadata: read`; no repository secrets were required.
+- Unit/config/documentation stage: **FAIL**, with nine missing-file errors because the web-uploaded repository omitted `.github/workflows/release.yml`, `.github/ISSUE_TEMPLATE/bug_report.yml`, `.github/dependabot.yml`, and related hidden release files.
+- Whitespace step: skipped because the prior test step failed.
+
+This is a repository-reconciliation failure, not an installer test failure. The local intended tree contains the missing files and passes all 46 tests. A new hosted run against the reconciled tree must be green before tagging an RC. Local ShellCheck remains unavailable, so the successful hosted ShellCheck result is authoritative for the tested GitHub commit.
 
 ## Publication blocker
 
@@ -56,7 +63,7 @@ Because the license gate is unresolved and no tag/remote release exists, no offi
 - `SHA256SUMS` containing the real SHA-256 hashes;
 - GitHub artifact provenance for the published assets.
 
-The downloaded assets must then be checked with `sha256sum -c SHA256SUMS` and `gh attestation verify ... -R OWNER/skittles`. The stable workflow also blocks publication while hardware sign-off tables contain `NOT TESTED`, performance measurements are unrecorded, or stable release notes retain their `DRAFT` marker.
+The downloaded assets must then be checked with `sha256sum -c SHA256SUMS` and `gh attestation verify ... -R 5897151/arch-skittles-installer --signer-workflow 5897151/arch-skittles-installer/.github/workflows/release.yml`. The stable workflow also blocks publication while hardware sign-off tables contain `NOT TESTED`, performance measurements are unrecorded, or stable release notes retain their `DRAFT` marker.
 
 ## Promotion rule
 

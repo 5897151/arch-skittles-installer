@@ -17,12 +17,62 @@ The Python suite currently covers CLI/help/version behavior, profile package dec
 
 Destructive tools are mocked. The zero-wipe byte-count regression uses real `dd` only against an ordinary temporary file and verifies the exact resulting byte length. Tests must never discover, format, mount, partition, wipe, or overwrite a real block device.
 
-### Current local status
+### Current automated status
 
-- `bash -n`: PASS
-- Python/unit consistency suite: PASS (46 tests after release-metadata and stable-gate checks)
-- `git diff --check`: PASS
-- ShellCheck: **BLOCKED in the current build container** because the executable is not installed and the container cannot retrieve it. `.github/workflows/ci.yml` runs ShellCheck on GitHub's Ubuntu 24.04 hosted runner; that remote CI run is still required before release.
+- local `bash -n`: PASS
+- local Python/unit/config/documentation/release consistency suite: PASS (46 tests)
+- local `git diff --check`: PASS
+- local YAML parse: PASS
+- local ShellCheck: unavailable in this build container
+- GitHub-hosted Bash syntax: PASS on run `35165611372`
+- GitHub-hosted ShellCheck 0.9.0: PASS on run `35165611372`
+- GitHub-hosted Python suite: not yet green because that GitHub commit omitted several `.github` files required by tests; reconcile the tree and rerun before tagging
+
+The hosted workflow is the authoritative ShellCheck environment. Do not treat the first hosted run as green CI until the reconciled tree completes all tests and whitespace checks.
+
+
+## Read-only hardware evidence sequence
+
+After installing the **downloaded RC artifact** on the target machine, capture a redacted evidence log. These commands are read-only; do not include drive serial numbers, Wi-Fi PSKs, or files from `/etc/NetworkManager/system-connections/`.
+
+```bash
+printf 'SKITTLES release: '; cat /etc/skittles-release
+printf 'Kernel: '; uname -r
+printf 'CPU: '; lscpu | sed -n 's/^Model name:[[:space:]]*//p'
+printf 'Session: '; printf '%s\n' "${XDG_SESSION_TYPE:-unknown}"
+
+for p in /sys/devices/system/cpu/cpufreq/policy*; do
+  [ -r "$p/scaling_governor" ] || continue
+  printf '%s driver=' "$p"
+  cat "$p/scaling_driver" 2>/dev/null || printf 'unknown\n'
+  printf '%s governor=' "$p"
+  cat "$p/scaling_governor"
+  [ -r "$p/energy_performance_preference" ] && { printf '%s epp=' "$p"; cat "$p/energy_performance_preference"; }
+done
+
+nvidia-smi
+cat /sys/module/nvidia_drm/parameters/modeset
+cat /sys/module/nvidia_drm/parameters/fbdev
+vulkaninfo --summary
+systemctl --failed
+resolvectl status
+findmnt -no TARGET,SOURCE,FSTYPE,OPTIONS /
+findmnt -no TARGET,SOURCE,FSTYPE,OPTIONS /boot
+swapon --show
+
+skittles-doctor
+sudo skittles-doctor
+sudo nft list ruleset
+```
+
+For suspend/resume, perform multiple cycles rather than one success. After each cycle, verify `nvidia-smi`, Wayland responsiveness, video/game playback, and inspect relevant warnings:
+
+```bash
+journalctl -b -p warning..alert
+journalctl -b | grep -Ei 'NVRM|nvidia|suspend|resume|PM:'
+```
+
+Record the RC tag, source commit, Arch ISO date, motherboard/firmware version, disk model **without serial**, monitor arrangement, network type, and package versions needed to reproduce the result.
 
 ## Virtual-machine tests
 

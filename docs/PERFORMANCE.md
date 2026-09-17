@@ -33,6 +33,34 @@ Before `v1.0.0`, measure on the supported i7-8700K + RTX 3060 Ti system from the
 
 Keep test resolution/settings, driver version, kernel, game build, ambient conditions where relevant, and run count in the results. Do not promote a tweak based on a single favorable run.
 
+
+## Repeatable release measurement procedure
+
+Use the exact downloaded RC and keep the machine configuration unchanged between comparison runs. Record the RC tag/source commit, Arch kernel, NVIDIA package version, game/benchmark build, resolution, graphics preset, display refresh mode, GameMode state, and approximate room conditions.
+
+For each representative workload:
+
+1. Reboot, log into Plasma Wayland, wait at least five minutes with no foreground workload, and record idle governor/EPP plus GPU idle state.
+2. Run the workload **three times without GameMode** using the same route/menu/save/benchmark sequence. Discard a run only for a documented external interruption.
+3. Reboot or return to the same settled state, then run the identical workload **three times with `gamemoderun`**.
+4. Record average FPS, 1% low FPS when the benchmark/capture tool provides it, visible frametime anomalies, GPU utilization/temperature, CPU utilization/temperature when available, and whether clocks/policy return to the pre-game state after exit.
+5. Report all runs, not only the best run. Do not call a difference meaningful if it is within normal run-to-run variance.
+
+Useful read-only state checks before, during, and after the workload include:
+
+```bash
+uname -r
+pacman -Q nvidia-utils nvidia-open nvidia-open-lts gamemode 2>/dev/null || true
+for p in /sys/devices/system/cpu/cpufreq/policy*; do
+  printf '%s: ' "$p"
+  cat "$p/scaling_driver" "$p/scaling_governor" 2>/dev/null | paste -sd ' ' -
+  [ -r "$p/energy_performance_preference" ] && cat "$p/energy_performance_preference"
+done
+nvidia-smi --query-gpu=driver_version,temperature.gpu,utilization.gpu,power.draw --format=csv
+```
+
+If the chosen title has no repeatable built-in benchmark or controlled scene, do not publish numeric claims from it. Use it only as a stability/compatibility test and keep `Current measurements` unclaimed.
+
 ## Tweaks we deliberately do not apply
 
 - `mitigations=off`: trades security for benchmark-dependent gains and is outside the project philosophy.

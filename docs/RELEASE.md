@@ -69,6 +69,10 @@ The release workflow intentionally refuses to publish anything until a non-empty
 9. Use the machine normally, including suspend/resume and updates; do not promote immediately after unit tests.
 10. If fixes are needed, increment the pre-release (`rc.2`, etc.) and repeat relevant gates.
 
+## Release bundle contents
+
+The published tarball is an end-user release bundle, not a mirror of the development checkout. It contains `skittles-installer.sh`, `README.md`, `LICENSE`, `CHANGELOG.md`, `SECURITY.md`, `CONTRIBUTING.md`, the `docs/` tree, and `SOURCE_COMMIT`. The installer inside the archive is executable. Development-only material such as `.github/`, `tests/`, caches, editor files, and local build output is excluded.
+
 ## Artifact verification concepts
 
 ### Integrity checksum
@@ -87,10 +91,10 @@ A Git tag identifies the source commit. If the maintainer signs tags and users v
 
 ### GitHub artifact provenance
 
-When the release workflow generates a GitHub artifact attestation, users can verify that a specific artifact was produced by the expected repository/workflow/commit. After replacing the owner placeholder:
+When the release workflow generates a GitHub artifact attestation, users can verify that a specific artifact was produced by the expected repository/workflow/commit. For this repository:
 
 ```bash
-gh attestation verify skittles-VERSION.tar.gz -R OWNER/skittles
+gh attestation verify skittles-VERSION.tar.gz -R 5897151/arch-skittles-installer --signer-workflow 5897151/arch-skittles-installer/.github/workflows/release.yml
 ```
 
 Provenance does **not** prove the installer is safe or bug-free. It proves the artifact is tied to the recorded build identity.
@@ -112,6 +116,25 @@ Before publishing a tag:
 - enable secret scanning and push protection on the public repository;
 - enable Private Vulnerability Reporting;
 - enable code scanning when it provides actionable signal.
+
+## Real GitHub validation record
+
+Hosted GitHub Actions has now executed against the public repository. The first hosted run is evidence of the environment and static-analysis behavior, but it is **not a green release gate** because the web upload omitted release-infrastructure files required by the test suite.
+
+Recorded run:
+
+- repository: `5897151/arch-skittles-installer`;
+- workflow: `CI`;
+- run ID: `35165611372`;
+- run URL: `https://github.com/5897151/arch-skittles-installer/actions/runs/35165611372`;
+- tested commit: `18fb447a098d99d3eb3a8255688f1fe0c72c46ad`;
+- Bash syntax: **PASS**;
+- ShellCheck 0.9.0: **PASS**;
+- unit/config/documentation tests: **FAIL**, because `.github/workflows/release.yml`, `.github/ISSUE_TEMPLATE/bug_report.yml`, and `.github/dependabot.yml` were absent from the uploaded GitHub tree; 40 tests were reached and nine errors were missing-file errors;
+- whitespace step: skipped after the test-step failure;
+- `GITHUB_TOKEN` permissions observed in the hosted log: `contents: read`, `metadata: read`; no repository secrets were required.
+
+The intended local RC tree contains the missing files and passes all 46 tests. The next hosted run must test the reconciled tree and finish Bash syntax, ShellCheck, all tests, and whitespace checks successfully before an RC tag is created.
 
 ## Current status
 
