@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import tarfile
+import tempfile
 import unittest
 import yaml
 
@@ -68,22 +69,23 @@ class GitHubInfrastructureTests(unittest.TestCase):
             if item.get("name") == "Require release prerequisites and matching version"
         )
         license_path = ROOT / "LICENSE"
-        self.assertFalse(license_path.exists(), "owner-selected LICENSE must remain absent before owner choice")
+        self.assertTrue(license_path.exists(), "Apache-2.0 LICENSE must be committed")
+        self.assertIn("Version 2.0, January 2004", license_path.read_text(encoding="utf-8"))
         env = os.environ.copy()
         env["GITHUB_REF_NAME"] = "v1.0.0-rc.1"
-        missing = subprocess.run(["bash", "-c", step["run"]], cwd=ROOT, env=env, text=True, capture_output=True)
-        self.assertNotEqual(missing.returncode, 0)
-        self.assertIn("LICENSE is required", missing.stderr)
-        try:
-            license_path.write_text("test-only license fixture\n", encoding="utf-8")
-            matching = subprocess.run(["bash", "-c", step["run"]], cwd=ROOT, env=env, text=True, capture_output=True)
+        with tempfile.TemporaryDirectory() as td:
+            fixture = Path(td)
+            shutil.copy2(ROOT / "skittles-installer.sh", fixture / "skittles-installer.sh")
+            missing = subprocess.run(["bash", "-c", step["run"]], cwd=fixture, env=env, text=True, capture_output=True)
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertIn("LICENSE is required", missing.stderr)
+            shutil.copy2(license_path, fixture / "LICENSE")
+            matching = subprocess.run(["bash", "-c", step["run"]], cwd=fixture, env=env, text=True, capture_output=True)
             self.assertEqual(matching.returncode, 0, matching.stderr)
             env["GITHUB_REF_NAME"] = "v1.0.0-rc.9"
-            mismatch = subprocess.run(["bash", "-c", step["run"]], cwd=ROOT, env=env, text=True, capture_output=True)
+            mismatch = subprocess.run(["bash", "-c", step["run"]], cwd=fixture, env=env, text=True, capture_output=True)
             self.assertNotEqual(mismatch.returncode, 0)
             self.assertIn("does not match installer VERSION", mismatch.stderr)
-        finally:
-            license_path.unlink(missing_ok=True)
 
     def test_release_bundle_contains_required_public_files(self):
         text = RELEASE.read_text(encoding="utf-8")
@@ -101,7 +103,7 @@ class GitHubInfrastructureTests(unittest.TestCase):
         )
         license_path = ROOT / "LICENSE"
         dist = ROOT / "dist"
-        self.assertFalse(license_path.exists(), "owner-selected LICENSE must remain absent before owner choice")
+        self.assertTrue(license_path.exists(), "Apache-2.0 LICENSE must be committed")
         env = os.environ.copy()
         env.update(
             GITHUB_REF_NAME="v1.0.0-rc.1",
@@ -109,7 +111,6 @@ class GitHubInfrastructureTests(unittest.TestCase):
         )
         hashes = []
         try:
-            license_path.write_text("test-only license fixture\n", encoding="utf-8")
             for _ in range(2):
                 proc = subprocess.run(
                     ["bash", "-c", step["run"]], cwd=ROOT, env=env,
@@ -145,7 +146,6 @@ class GitHubInfrastructureTests(unittest.TestCase):
                 self.assertEqual(verify.returncode, 0, verify.stderr)
             self.assertEqual(hashes[0], hashes[1])
         finally:
-            license_path.unlink(missing_ok=True)
             shutil.rmtree(dist, ignore_errors=True)
 
     def test_repository_hygiene_scanner_passes_current_tree(self):

@@ -16,13 +16,13 @@ SIGNOFF_CHECK = ROOT / "scripts/check_release_signoff.py"
 
 
 class ReleaseMetadataTests(unittest.TestCase):
-    def test_repository_metadata_has_three_descriptions_and_blank_website(self):
-        self.assertIn("### Recommended", META)
-        self.assertIn("### Short", META)
-        self.assertIn("### Technical", META)
+    def test_repository_metadata_has_final_description_and_blank_website(self):
+        self.assertIn("## Description", META)
         self.assertRegex(META, r"## Website\n\n\n## Topics")
-        recommended = re.search(r"### Recommended\n\n(.+)", META).group(1)
-        self.assertLess(len(recommended), 250)
+        description = re.search(r"## Description\n\n(.+)", META).group(1)
+        self.assertLessEqual(len(description), 160)
+        self.assertIn("i7-8700K", description)
+        self.assertIn("RTX 3060 Ti", description)
 
     def test_topics_are_focused(self):
         block = re.search(r"## Topics\n\n```text\n(.*?)\n```", META, re.S).group(1)
@@ -52,7 +52,7 @@ class ReleaseMetadataTests(unittest.TestCase):
         self.assertTrue(RC_NOTES.startswith("# SKITTLES v1.0.0-rc.1"))
         self.assertIn("release candidate", RC_NOTES)
         self.assertIn("NOT TESTED", RC_NOTES)
-        self.assertIn("No owner-authorized software license", RC_NOTES)
+        self.assertIn("Apache License 2.0", RC_NOTES)
 
     def test_stable_notes_are_explicitly_draft_gated(self):
         self.assertIn("# SKITTLES v1.0.0", STABLE_NOTES)

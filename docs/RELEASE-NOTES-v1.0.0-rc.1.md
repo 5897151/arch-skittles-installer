@@ -50,7 +50,7 @@ Both Arch `linux` and `linux-lts` are installed with matching NVIDIA open kernel
 
 ## Automated validation
 
-The corrected installer baseline passed hosted GitHub CI with repository completeness, Bash syntax, ShellCheck 0.9.0, 50/50 tests, and whitespace checks. Follow-up release engineering adds fail-closed stable sign-off, deterministic-asset regression coverage, repository hygiene checks, adversarial input tests, and corrected recovery resolver guidance. Physical validation remains separate and `NOT TESTED`.
+The current public baseline passes hosted GitHub CI with repository completeness, Bash syntax, ShellCheck 0.9.0, 68/68 tests, repository hygiene, and whitespace checks. The suite includes fail-closed stable sign-off, deterministic-asset regression coverage, adversarial input tests, and recovery-documentation checks. Physical validation remains separate and `NOT TESTED`.
 
 ## Known limitations
 
@@ -59,7 +59,7 @@ The corrected installer baseline passed hosted GitHub CI with repository complet
 - Secure Boot and hibernation are not implemented.
 - DNS is not encrypted by SKITTLES.
 - Logical zero wiping is not certified SSD/NVMe NAND sanitization.
-- No owner-authorized software license is present yet, so public release publication remains blocked by the release workflow.
+- The source is licensed under Apache License 2.0; physical release-hardware, recovery, performance, and real-artifact/provenance validation remain pending.
 
 ## Verification
 

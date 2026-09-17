@@ -48,6 +48,10 @@ The gaming profile adds Steam, 32-bit NVIDIA/Vulkan libraries, GameMode, MangoHu
 
 `linux-lts` is installed alongside `linux`. The release ships detailed Arch-ISO recovery instructions covering safe device identification, LUKS unlock, mounts, chroot networking, package/NVIDIA reinstall, initramfs rebuild, GRUB repair, LTS selection, journal inspection, LUKS-header backup and clean teardown.
 
+## License
+
+SKITTLES is licensed under the Apache License 2.0.
+
 ## Release gating
 
 Stable publication requires the complete machine-readable hardware/recovery/performance sign-off to be `PASS`, SHA-bound performance evidence, green exact-source CI, and removal of this document's `DRAFT:` marker. Automated/static validation alone is not a substitute for those physical gates.

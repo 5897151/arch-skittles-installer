@@ -4,7 +4,7 @@ SKITTLES uses Semantic Versioning. The current source remains `1.0.0-rc.1`; ther
 
 ## Version and prerequisite agreement
 
-For any release, all of these must agree: `VERSION` in `skittles-installer.sh`, the Git tag without its leading `v`, curated `docs/RELEASE-NOTES-vTAG.md`, and the release asset names. The workflow also requires a non-empty owner-selected `LICENSE` before either RC or stable publication.
+For any release, all of these must agree: `VERSION` in `skittles-installer.sh`, the Git tag without its leading `v`, curated `docs/RELEASE-NOTES-vTAG.md`, and the release asset names. The repository is licensed under Apache-2.0 and the workflow requires the committed non-empty `LICENSE` before either RC or stable publication.
 
 The release job alone receives write/OIDC/attestation permissions. Repository-level workflow permissions remain `contents: read`, checkout does not persist credentials, and first-party Actions are pinned to full commit SHAs.
 
@@ -20,7 +20,7 @@ For `v1.0.0`, `scripts/check_release_signoff.py` requires:
 - `performance_measurements=PASS` plus `evidence.performance_sha256` matching the actual `docs/PERFORMANCE.md` bytes;
 - stable release notes with the `DRAFT:` marker removed.
 
-Malformed or missing sign-off data fails closed. RC publication intentionally does not require hardware PASS, because an RC is the artifact used to obtain that hardware evidence; however, the license and tag/version prerequisites still apply.
+Malformed or missing sign-off data fails closed. RC publication intentionally does not require hardware PASS, because an RC is the artifact used to obtain that hardware evidence; however, the committed Apache-2.0 license and tag/version prerequisites still apply.
 
 When physical testing is completed, update the human-readable tables in `docs/TESTING.md`/`docs/PERFORMANCE.md` and the corresponding machine-readable status together. Do not mark a field PASS from static inspection alone.
 
@@ -60,7 +60,7 @@ Development-only `.github/`, `tests/`, caches, and local build output are exclud
 
 ## Release-candidate procedure
 
-1. Resolve the owner license and commit the actual `LICENSE`.
+1. Confirm the canonical Apache-2.0 `LICENSE` is present and unchanged except for deliberate license-version decisions.
 2. Ensure the intended RC source is clean, reviewed, and green on hosted CI.
 3. Confirm no immutable tag/release already uses the RC version.
 4. Create the RC tag on the exact green commit; never move an existing public tag.

@@ -14,9 +14,9 @@ python3 scripts/audit_repository.py
 git diff --check
 ```
 
-GitHub run `35172528577` on commit `5fc333d5ee45c8c07787802c4605483f6d717b17` is the current hosted installer baseline: completeness PASS, Bash PASS, ShellCheck 0.9.0 PASS, 50/50 Python PASS, whitespace PASS. It includes the four resolver/identity/doctor audit regressions. Follow-up release-gate, reproducibility, hygiene, recovery-doc, and adversarial tests must receive their own exact-SHA hosted run after publication; local success is not substituted for that run.
+GitHub run `35175926302` on commit `8b3632938aaff6d6721a064b36b12b78b0ed0fbb` is the current public automated baseline: repository completeness PASS, Bash PASS, ShellCheck 0.9.0 PASS, **68/68 Python PASS**, repository hygiene PASS, and whitespace PASS.
 
-The final follow-up tree passes **68/68 tests locally** in a clean Git simulation, plus Bash syntax, YAML/JSON, Markdown relative links, repository hygiene, whitespace, release reproducibility, and fail-closed stable-gate fixtures. The installer bytes are unchanged from the hosted baseline. Local ShellCheck is unavailable, so the final published SHA still needs a hosted ShellCheck/CI run before this batch becomes authoritative.
+The suite includes release-gate, reproducibility, hygiene, recovery-documentation, resolver, destructive-path, identity-binding, credential-transport, doctor, generated-configuration, metadata, and adversarial-input coverage. Automated success is not copied into physical sign-off fields.
 
 ## One physical validation sequence
 
@@ -82,4 +82,4 @@ If the performance document changes afterward, the stable gate fails until the e
 
 ## Current physical status
 
-All mandatory `release-signoff.json` entries are currently `NOT TESTED`. Automated/static PASS results must not be copied into physical sign-off fields.
+All mandatory `release-signoff.json` entries are currently `NOT TESTED`. The Apache-2.0 license decision and green automated CI do not change those physical statuses.

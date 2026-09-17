@@ -88,12 +88,11 @@ class DocumentationConsistencyTests(unittest.TestCase):
     def test_license_state_matches_readme(self):
         license_path = ROOT / "LICENSE"
         text = README.read_text(encoding="utf-8")
-        if license_path.exists():
-            self.assertGreater(license_path.stat().st_size, 0)
-            self.assertNotIn("No software license has been selected", text)
-        else:
-            self.assertIn("No software license has been selected", text)
-            self.assertIn("blocker for `v1.0.0`", text)
+        license_text = license_path.read_text(encoding="utf-8")
+        self.assertIn("Apache License", license_text)
+        self.assertIn("Version 2.0, January 2004", license_text)
+        self.assertIn("Apache License 2.0", text)
+        self.assertNotIn("No software license has been selected", text)
 
     def test_recovery_uses_arch_chroot_resolver_handoff(self):
         recovery = (ROOT / "docs/RECOVERY.md").read_text(encoding="utf-8")

@@ -18,9 +18,13 @@ SKITTLES follows Semantic Versioning. This changelog is structured after Keep a 
 - Expanded adversarial disk-plan/input regression coverage without changing installer behavior.
 - Updated recovery resolver guidance to rely on current `arch-chroot` resolver/API-filesystem handling instead of a manual `/mnt/run` copy workaround.
 
+### Licensing
+
+- Selected the Apache License 2.0 for permissive reuse with an explicit contributor patent grant.
+- Added the canonical Apache-2.0 `LICENSE` and reconciled public licensing documentation/tests.
+
 ### Known Issues
 
-- Stable release is blocked until an owner-authorized software license is selected.
 - Real i7-8700K + RTX 3060 Ti release-candidate installation, suspend/resume, recovery, gaming, update, and both-kernel sign-off are not yet recorded.
 - Performance changes have no target-hardware benchmark results yet.
 

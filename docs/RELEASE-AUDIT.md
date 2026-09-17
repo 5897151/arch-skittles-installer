@@ -1,16 +1,17 @@
 # SKITTLES release audit
 
-Status: automated/static release hardening is complete locally against the corrected installer baseline; stable release remains **NOT READY FOR v1.0.0**. Physical results are never inferred from static checks.
+Status: automated/static release hardening is **PASS** on the public repository; stable release remains **NOT READY FOR v1.0.0**. Physical results are never inferred from static checks.
 
 ## Hosted evidence
 
-Public commit `5fc333d5ee45c8c07787802c4605483f6d717b17` passed GitHub Actions run `35172528577`: repository completeness, Bash syntax, ShellCheck 0.9.0, 50/50 Python tests, and whitespace all PASS. CI permissions observed in the log were read-only (`contents: read`, `metadata: read`).
+Public commit `8b3632938aaff6d6721a064b36b12b78b0ed0fbb` passed GitHub Actions run `35175926302`: repository completeness, Bash syntax, ShellCheck 0.9.0, **68/68 Python tests**, repository hygiene, and whitespace all PASS. CI permissions observed in the log were read-only (`contents: read`, `metadata: read`).
 
-The hosted suite includes four release-significant regressions: resolver handoff after `arch-chroot`, target identity revalidation before partitioning, failed-service doctor query errors, and console-session handling.
+The installer blob on that SHA is `0532da3e6c8733bf0b88afe861ba3469acd75af0`. This licensing/README/documentation pass leaves installer logic unchanged.
 
-## Final local automated batch
+## License and release-gate state
 
-A clean final-tree simulation passes Bash syntax, **68/68 Python tests**, five YAML parses, JSON parsing, Markdown relative-link validation, repository hygiene, and whitespace. The exact installer blob remains `0532da3e6c8733bf0b88afe861ba3469acd75af0`, identical to the hosted ShellCheck-green baseline. Local ShellCheck itself is unavailable. The actual release build recipe produced identical tarball SHA-256 values twice: `6ed72c587fce74a5e9268a3da4ce1b6bea3cebba0c6bdbd39cccaa1a910deb4c` using a fixed test source identity and temporary test-only license fixture.
+SKITTLES is licensed under Apache License 2.0 using the canonical `LICENSE` text. The former license-selection blocker is resolved. Stable publication still fails closed through `release-signoff.json` and `scripts/check_release_signoff.py`: every mandatory physical/recovery/performance key must be present and exactly `PASS`, performance evidence must be SHA-bound to `docs/PERFORMANCE.md`, and stable notes must not contain the `DRAFT:` marker.
+
 
 ## Static source audit
 
@@ -83,7 +84,7 @@ Sources: <https://wiki.archlinux.org/title/Dm-crypt/System_configuration>, <http
 
 ## Release engineering audit
 
-The stable workflow now consumes `release-signoff.json` through `scripts/check_release_signoff.py`. Stable publication fails closed if any required key is missing, extra, malformed, empty, or not exactly `PASS`; if performance evidence is missing or its SHA-256 does not match `docs/PERFORMANCE.md`; or if stable notes still contain `DRAFT:`. RC tags may retain NOT TESTED hardware state, but every release still requires a non-empty owner-selected `LICENSE` and exact tag/version equality.
+The stable workflow now consumes `release-signoff.json` through `scripts/check_release_signoff.py`. Stable publication fails closed if any required key is missing, extra, malformed, empty, or not exactly `PASS`; if performance evidence is missing or its SHA-256 does not match `docs/PERFORMANCE.md`; or if stable notes still contain `DRAFT:`. RC tags may retain NOT TESTED hardware state, but every release still requires the committed non-empty Apache-2.0 `LICENSE` and exact tag/version equality.
 
 The exact workflow asset recipe is exercised twice by automated tests. Two builds from the same fixed source identity produce byte-identical tarball SHA-256 values; `SHA256SUMS` self-verifies; the bundled installer is mode 0755; `SOURCE_COMMIT` is deterministic; and `.github/` plus `tests/` are excluded from the end-user archive. Repository tests remain in GitHub.
 
@@ -95,9 +96,11 @@ The current-tree audit found no private-key headers, common GitHub/AWS token pat
 
 ## Remaining external gates
 
-- owner chooses and adds the software license;
-- the final audit batch must be published to `main` and receive an exact-SHA hosted green run (currently blocked by GitHub integration HTTP 403);
-- a real RC must be built/published/downloaded and its checksum/provenance verified;
-- physical i7-8700K + RTX 3060 Ti install/runtime/update/recovery/performance validation must be recorded.
+- publish/download a real RC and verify its `SHA256SUMS` and GitHub attestation/provenance;
+- complete physical i7-8700K + RTX 3060 Ti install/runtime validation on both kernels;
+- complete NVIDIA/Wayland/Vulkan, suspend/resume, networking/audio/gaming/update validation;
+- execute the Arch-ISO recovery drill as written;
+- record the target-hardware performance measurements and bind their SHA-256 evidence;
+- only after all mandatory sign-off entries are `PASS`, reconcile final stable notes and consider `v1.0.0`.
 
-No tag was created. No hardware result is claimed.
+No stable tag is created by this pass. No hardware result is claimed.

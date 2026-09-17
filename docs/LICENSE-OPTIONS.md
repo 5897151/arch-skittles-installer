@@ -1,25 +1,28 @@
-# License owner gate
+# License decision
 
-SKITTLES does not currently have an owner-authorized software license. Do not publish a stable release until the repository owner chooses one and supplies the correct copyright holder/name information.
+SKITTLES is licensed under the **Apache License 2.0**. The canonical license text is in [`LICENSE`](../LICENSE).
 
-This is a practical comparison, not legal advice.
+## Decision
 
-| License | Redistribution obligations | Derivative-work obligations | Patent provisions | Compatibility notes for SKITTLES |
-| --- | --- | --- | --- | --- |
-| **MIT** | Keep the copyright notice and MIT permission notice with copies or substantial portions. Source disclosure is not required. | Modified versions may be redistributed under MIT or another license, including proprietary terms, so long as the MIT notice is preserved for the MIT-covered material. | No explicit patent grant or patent-retaliation clause. | Very simple and permissive. Easy to combine with most Bash/Linux-oriented projects. Downstream users may make closed derivatives. |
-| **Apache-2.0** | Include the license, preserve required notices, mark modified files, and preserve any applicable `NOTICE` content. Source disclosure is not required. | Modified versions may be redistributed under other terms, provided Apache-2.0 obligations for the covered material are preserved. | Explicit contributor patent license plus patent-termination language for certain patent litigation. | Permissive like MIT but more explicit about patents and notices. Apache-2.0 code is compatible with GPLv3, but not with GPLv2-only. |
-| **GPL-3.0-or-later** | When conveying covered binaries/object code, provide Corresponding Source by a GPLv3-compliant method; preserve notices and provide the GPL terms. | Distributed modified/combined derivative works covered by the GPL must be licensed as a whole under GPLv3-or-later terms. Private modification without distribution does not trigger source-release obligations. | Includes an explicit contributor patent license and additional patent protections/conditions for downstream recipients. | Strong copyleft. Works well if the owner wants redistributed SKITTLES derivatives to remain GPL-covered. GPLv3 is compatible with Apache-2.0 material; combining with proprietary derivative code is generally not compatible with GPL distribution requirements. |
+Apache-2.0 was selected for SKITTLES because it preserves the permissive reuse model that fits a public installer while adding clearer long-term legal mechanics than MIT for contributors and downstream users:
 
-## Practical owner choice
+- source inspection, modification, forking, redistribution, and commercial use are allowed;
+- downstream projects are not forced into a copyleft license;
+- contributors provide an explicit patent license for their contributions, subject to Apache-2.0's terms;
+- redistributed Apache-covered material retains the required license/notices and modified files must be identified as changed;
+- no custom SKITTLES-specific restrictions were added.
 
-- Choose **MIT** if the priority is the shortest permissive license and allowing proprietary derivatives.
-- Choose **Apache-2.0** if the priority is permissive reuse plus an explicit patent grant and more detailed notice rules.
-- Choose **GPL-3.0-or-later** if the priority is requiring distributed derivatives of the covered work to remain under GPL copyleft terms.
+No `NOTICE` file is currently required by project-specific notices. If future contributions introduce material that requires notices, third-party source, or redistributed binaries, those obligations must be reviewed independently.
 
-No `LICENSE` file should be added until the owner makes the choice and confirms the copyright holder/name that belongs in the repository.
+## Alternatives considered
 
-## SKITTLES-specific compatibility context
+| License | Why it was not selected |
+| --- | --- |
+| **MIT** | Excellent simplicity and permissive reuse, but it has no explicit patent grant. Apache-2.0 provides a clearer contributor/downstream patent framework for modest additional complexity. |
+| **GPL-3.0-or-later** | Strong copyleft would keep distributed derivatives GPL-covered, but SKITTLES intentionally permits proprietary and differently licensed downstream integrations as long as Apache-2.0 obligations are preserved. |
 
-The repository is primarily original Bash, tests, and documentation. It names Arch packages and invokes system utilities, but the release bundle does not incorporate Arch Linux package source, NVIDIA driver source, or those packages' binaries. Merely calling an installed command or listing a package dependency does not normally cause that external program's license to become the license of this installer.
+## Repository and dependency context
 
-That means the owner's choice is mainly about how **SKITTLES itself** may be copied and modified. If the project later copies third-party source/snippets into the repository, statically combines licensed code, or redistributes third-party binaries, those materials must be reviewed separately for notice, source, patent, or copyleft obligations.
+SKITTLES is primarily original Bash, Python tests, workflows, and documentation. It names Arch packages and invokes installed system utilities, but this repository and its release bundle do not incorporate Arch Linux package source, NVIDIA driver source, or those packages' binaries.
+
+The Apache-2.0 license covers SKITTLES's own covered material. Third-party software installed or invoked by SKITTLES remains under its own license. If future changes copy third-party source, bundle binaries, or add other licensed assets, their compatibility and notice/source obligations must be reviewed separately.
