@@ -18,6 +18,10 @@ REQUIRED_DOCS = [
     ROOT / "docs/RECOVERY.md",
     ROOT / "docs/TESTING.md",
     ROOT / "docs/RELEASE.md",
+    ROOT / "docs/RELEASE-AUDIT.md",
+    ROOT / "docs/RELEASE-DECISION.md",
+    ROOT / "docs/RELEASE-NOTES-v1.0.0-rc.1.md",
+    ROOT / "docs/RELEASE-NOTES-v1.0.0.md",
 ]
 
 
@@ -54,15 +58,16 @@ class DocumentationConsistencyTests(unittest.TestCase):
                 self.assertIn(option, text)
 
     def test_local_markdown_links_resolve(self):
-        for source in REQUIRED_DOCS:
+        markdown = [p for p in ROOT.rglob("*.md") if ".git" not in p.parts]
+        for source in markdown:
             text = source.read_text(encoding="utf-8")
             for target in re.findall(r"\[[^\]]+\]\(([^)]+)\)", text):
-                if "://" in target or target.startswith("#"):
+                if "://" in target or target.startswith("#") or target.startswith("mailto:"):
                     continue
                 local = target.split("#", 1)[0]
                 if not local:
                     continue
-                with self.subTest(source=source.name, target=target):
+                with self.subTest(source=source.relative_to(ROOT).as_posix(), target=target):
                     self.assertTrue((source.parent / local).resolve().exists())
 
     def test_readme_profile_claims_match_package_output(self):
@@ -89,6 +94,17 @@ class DocumentationConsistencyTests(unittest.TestCase):
         else:
             self.assertIn("No software license has been selected", text)
             self.assertIn("blocker for `v1.0.0`", text)
+
+    def test_recovery_uses_arch_chroot_resolver_handoff(self):
+        recovery = (ROOT / "docs/RECOVERY.md").read_text(encoding="utf-8")
+        self.assertIn("arch-chroot /mnt", recovery)
+        self.assertNotIn("mkdir -p /mnt/run/systemd/resolve", recovery)
+        self.assertNotIn("cp -L /etc/resolv.conf /mnt/run/systemd/resolve/stub-resolv.conf", recovery)
+        self.assertIn("fix networking/resolution in the live ISO first", recovery)
+        self.assertNotIn("findmnt /mnt /mnt/boot", recovery)
+        self.assertIn("findmnt -T /mnt", recovery)
+        self.assertIn("findmnt -T /mnt/boot", recovery)
+        self.assertNotIn("sudo cryptsetup luksHeaderBackup", recovery)
 
 
 if __name__ == "__main__":

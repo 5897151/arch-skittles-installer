@@ -75,3 +75,36 @@ If the chosen title has no repeatable built-in benchmark or controlled scene, do
 ## Current measurements
 
 **NOT TESTED on release hardware.** No numeric performance improvement is claimed for `1.0.0-rc.1` yet.
+
+## Release measurement record template
+
+Complete this section on the physical release machine; do not replace raw run data with a score.
+
+```text
+RC tag / SOURCE_COMMIT:
+Arch ISO date:
+Kernel:
+NVIDIA packages / driver:
+Game / workload build:
+Resolution / preset / refresh mode:
+Ambient/room notes:
+
+Normal policy runs:
+1.
+2.
+3.
+
+GameMode runs:
+1.
+2.
+3.
+
+Observed average / 1% low / frametime notes:
+CPU temperature / policy notes:
+GPU temperature / power notes:
+Policy restored after GameMode exit: PASS | FAIL
+Long-run stability: PASS | FAIL
+Conclusion (including variance/downsides):
+```
+
+After all required measurements are complete and reviewed, set `performance_measurements` to `PASS` in `release-signoff.json` and record the SHA-256 of this completed file in `evidence.performance_sha256`. Until then it remains `NOT TESTED` and no numeric performance benefit is claimed.

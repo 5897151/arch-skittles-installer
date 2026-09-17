@@ -2,88 +2,58 @@
 
 ## NOT READY FOR v1.0.0
 
-Source version: `1.0.0-rc.1`. The missing documentation and test modules have been restored locally. The full hosted baseline now passes; follow-up correctness fixes have only local validation. Neither is a hardware release gate.
+Source version remains `1.0.0-rc.1`. Repository repair and the four correctness fixes are now proven by hosted CI, but the owner-selected license, physical target validation, recovery execution, performance measurements, and a real tagged release remain open.
 
-## Repository repair evidence
+## Exact hosted baseline
 
-- Observed public `main`: `d2331a1c586907a6a6a16ada1179eb9d54484314`.
-- Local union repair: `2bb7bff68a5ba63c24eb2dbfce5246c851f051a3`.
-- Exactly nine files restored from `43e9e4ef10b45cc0367fea57a76789c21c1b9850`; no existing files deleted or replaced.
-- All four Python test modules discovered: docs, GitHub, installer, release metadata.
-- Installer bytes unchanged from public `main` (Git blob `66687ea9d3a41ea68beb8aa1887c9df859181139`).
-- The original repair and CI completeness commits did not change installer behavior. Subsequent correctness changes are listed below; use `git rev-parse HEAD` for their containing commit. No hosted result is claimed for them yet.
-
-## Local automated evidence
-
-At the union repair commit:
+GitHub Actions run `35172528577` tested public `main` commit `5fc333d5ee45c8c07787802c4605483f6d717b17` on Ubuntu 24.04.
 
 | Check | Result |
 | --- | --- |
+| Repository completeness | PASS |
 | Bash syntax | PASS |
-| Python discovery | PASS, 46 tests across all four modules |
-| All five GitHub YAML files | PASS, PyYAML 6.0.3 |
-| Staged whitespace | PASS |
-| Relative Markdown file links | PASS, 13 links across all Markdown; anchors not validated |
-| Tracked binary/NUL and junk scan | PASS, no findings |
-| Secret-pattern scan | PASS, no findings across 42 unique blobs in available Git history |
-| Local ShellCheck | BLOCKED, executable unavailable |
+| ShellCheck | PASS, 0.9.0 |
+| Python discovery | PASS, 50/50 tests |
+| Whitespace | PASS |
+| CI token permissions | `contents: read`, `metadata: read` |
 
-The secret scan covered private-key headers, common GitHub/AWS token forms, bearer tokens, credential-bearing URLs, literal Wi-Fi PSK assignments, and personal home paths. Pattern scanning is not proof that arbitrary credentials or identifying data are absent. History coverage is limited to Git objects available in the clone.
+The hosted 50-test suite includes regressions for resolver handoff after `arch-chroot`, target identity revalidation between wipe and partitioning, failed-service doctor query errors, and console-session handling. This is the first legitimate hosted baseline for the corrected installer.
 
-## Hosted GitHub CI evidence
+## Final automated hardening prepared after that baseline
 
-The owner imported and pushed the prepared commits. [Run 35172143080](https://github.com/5897151/arch-skittles-installer/actions/runs/35172143080) tested `580532268d2e0e39f4671dd0b035b75ed3170e6f`:
+The installer bytes remain identical to the hosted baseline (Git blob `0532da3e6c8733bf0b88afe861ba3469acd75af0`). The follow-up release-engineering batch changes workflows, tests, release metadata, and documentation only.
 
-- Complete documentation/test tree check: PASS.
-- Bash syntax: PASS.
-- ShellCheck **0.9.0**: PASS.
-- Python: **46 tests PASS**, all four modules discovered.
-- Whitespace: PASS.
+Local final validation currently includes:
 
-This is the first verified complete hosted baseline. It does not cover subsequent fixes.
+- fail-closed machine-readable stable sign-off in `release-signoff.json`;
+- stable-gate fixtures for PASS, FAIL, NOT TESTED, BLOCKED, WARN, empty/missing/malformed data, missing/changed performance evidence, and draft stable notes;
+- executable tests for missing `LICENSE` and tag/version mismatch;
+- two-build byte-for-byte release-archive reproducibility testing using the workflow's actual build step;
+- CI current-tree hygiene scan for private-key/token patterns, credential-bearing URLs, NUL/binary-like tracked files, and generated junk;
+- adversarial input and destructive-path guard tests;
+- recovery resolver documentation corrected to use current `arch-chroot` behavior;
+- current package/NVIDIA/network/CPU/storage/recovery/security static audits recorded in [RELEASE-AUDIT.md](RELEASE-AUDIT.md).
 
-## Follow-up fixes awaiting publication
+A clean final-tree simulation passes Bash syntax, **68/68 Python tests**, five GitHub YAML parses, `release-signoff.json` parsing, all local Markdown relative links, the repository hygiene scan, and `git diff --check`. The exact release build recipe produced the same tarball SHA-256 twice (`6ed72c587fce74a5e9268a3da4ce1b6bea3cebba0c6bdbd39cccaa1a910deb4c` with the fixed test source identity), and the untouched stable sign-off correctly fails closed because hardware entries remain `NOT TESTED`. Local ShellCheck is unavailable, but `skittles-installer.sh` is byte-identical to the hosted ShellCheck-green baseline.
 
-The follow-up source passes **50 local tests**. The four added regressions cover resolver replacement ordering and chroot failure, identity change between wipe and partitioning, failed-service query errors, and console-session handling. Bash syntax and whitespace checks pass locally. ShellCheck is unavailable locally; the baseline result cannot be carried over to changed installer code.
+This follow-up batch cannot become release evidence until it is committed to public `main` and its exact SHA receives a hosted green run. The GitHub integration currently returns HTTP 403 for repository writes, so publication is an external access blocker rather than an unresolved code defect.
 
-Installer behavior changed only in those areas. No release version/tag/license was changed. The accidentally tracked transfer bundle is removed from the follow-up source tree.
+## License blocker
 
-GitHub publication remains blocked by credentials: shell Git has no authenticated push credentials and the GitHub integration rejected tree creation with HTTP 403. Owner authorization is already explicit; no further authorization is required, but working write access is needed. The broader audit and exact-SHA hosted verification remain incomplete. See [RELEASE-AUDIT.md](RELEASE-AUDIT.md).
+`LICENSE` is intentionally absent. The owner must choose MIT, Apache-2.0, or GPL-3.0-or-later and provide the correct copyright-holder text. The release workflow refuses every tag, including RC tags, until a non-empty `LICENSE` exists.
 
-## Publication blocker
+## Hardware and recovery gates
 
-- `LICENSE` is missing. The owner must select and add an authorized license, then update README/release material to name it accurately. The release workflow intentionally refuses to publish any release without a non-empty `LICENSE`.
+Every entry in `release-signoff.json` remains `NOT TESTED`. Required physical evidence includes clean install, LUKS unlock, cold/warm boots, both kernels, Plasma Wayland, NVIDIA/Vulkan, network/DNS/firewall, audio/USB, repeated suspend/resume, gaming stack, full update, post-update boots, doctor checks, complete Arch-ISO recovery, and performance measurements.
 
-## Hardware validation still required
+The stable release gate requires every mandatory key to equal `PASS`, requires `docs/PERFORMANCE.md` to match its recorded SHA-256 evidence, and requires stable release notes to have no `DRAFT:` marker. Missing/renamed/malformed sign-off data fails closed.
 
-Every item below remains `NOT TESTED` on the supported i7-8700K + RTX 3060 Ti machine from the exact RC artifact:
+## Release artifact gate
 
-- clean install from a current verified Arch ISO;
-- cold boot, warm reboot, and repeated LUKS unlock;
-- `linux` boot and `linux-lts` boot/recovery selection;
-- Plasma Wayland login/logout and lock/unlock;
-- NVIDIA modules, `nvidia-smi`, Vulkan, sustained GPU load, and multi-hour idle;
-- CPU-load stability and recorded benchmark/power/thermal measurements for shipped performance policy;
-- Ethernet, DHCP renewal, DNS through `systemd-resolved`, IPv6 when available, and nftables ordinary connectivity;
-- audio and representative USB devices;
-- repeated suspend/resume;
-- gaming profile: Steam, Proton, 32-bit NVIDIA/Vulkan, GameMode, MangoHud, and NTSync;
-- full package upgrade, kernel update, NVIDIA update, then both-kernel boots;
-- `skittles-doctor` as user and root before/after updates;
-- the full current-Arch-ISO recovery procedure in `docs/RECOVERY.md`;
-- if practical, a second clean install from the exact RC release artifact.
+There are currently no Git tags and no GitHub releases. Retaining `1.0.0-rc.1` is therefore correct; no immutable RC tag is being moved or replaced.
 
-## Release-asset validation still required
-
-The license gate is unresolved. The GitHub releases endpoint returned no releases on 2026-09-17; no published release assets or provenance have been verified. Before stable release, the actual tagged workflow must create and publish:
-
-- `skittles-1.0.0.tar.gz`;
-- `skittles-installer-1.0.0.sh`;
-- `SHA256SUMS` containing the real SHA-256 hashes;
-- GitHub artifact provenance for the published assets.
-
-The downloaded assets must then be checked with `sha256sum -c SHA256SUMS` and `gh attestation verify ... -R 5897151/arch-skittles-installer --signer-workflow 5897151/arch-skittles-installer/.github/workflows/release.yml`. The stable workflow also blocks publication while hardware sign-off tables contain `NOT TESTED`, performance measurements are unrecorded, or stable release notes retain their `DRAFT` marker.
+After the owner license is selected and the final exact-SHA CI is green, an RC tag may be created. The real GitHub release assets must then be downloaded independently, checked with `sha256sum -c SHA256SUMS`, and verified with `gh attestation verify` against `5897151/arch-skittles-installer/.github/workflows/release.yml`. Only those downloaded RC bytes qualify for physical validation.
 
 ## Promotion rule
 
-Do not change the installer/tag/release notes to `1.0.0` until the license is resolved, GitHub CI passes, every required real-hardware/recovery test is recorded PASS, measurements are documented, and release assets/provenance have been verified from the actual tag.
+Do not promote to `v1.0.0` until the owner license exists, the final source SHA has green hosted CI, every mandatory machine-readable sign-off is PASS, performance evidence is recorded, stable notes are no longer draft, the recovery procedure has actually been executed, and the real tagged assets/provenance have been verified.

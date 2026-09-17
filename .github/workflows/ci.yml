@@ -30,7 +30,7 @@ jobs:
             docs/ARCHITECTURE.md docs/GITHUB-METADATA.md docs/PRIVACY.md docs/RECOVERY.md \
             docs/RELEASE-AUDIT.md docs/SECURITY-MODEL.md docs/LICENSE-OPTIONS.md docs/PERFORMANCE.md \
             docs/RELEASE-DECISION.md docs/RELEASE-NOTES-v1.0.0-rc.1.md docs/RELEASE-NOTES-v1.0.0.md \
-            docs/RELEASE.md docs/TESTING.md; do
+            docs/RELEASE.md docs/TESTING.md release-signoff.json scripts/check_release_signoff.py scripts/audit_repository.py; do
             test -s "$file" || { echo "Required source file missing or empty: $file" >&2; exit 1; }
           done
 
@@ -42,6 +42,9 @@ jobs:
 
       - name: Unit and generated-config tests
         run: python3 -m unittest discover -s tests -v
+
+      - name: Repository hygiene scan
+        run: python3 scripts/audit_repository.py
 
       - name: Whitespace sanity
         run: git diff --check

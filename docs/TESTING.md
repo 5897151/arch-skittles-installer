@@ -1,142 +1,85 @@
 # Testing and Release Sign-off
 
-Automated tests are necessary but insufficient for SKITTLES because the release target includes destructive storage behavior, UEFI firmware, a specific NVIDIA GPU, suspend/resume, and real network hardware.
+Automated validation is necessary but cannot substitute for the physical i7-8700K + RTX 3060 Ti release test. All destructive automated tests use mocks or ordinary temporary files; they must never target real block devices.
 
-## Safe automated tests
+## Automated gate
 
-Run from the repository root as an ordinary user:
+From the repository root:
 
 ```bash
 bash -n skittles-installer.sh
 shellcheck skittles-installer.sh
 python3 -m unittest discover -s tests -v
+python3 scripts/audit_repository.py
 git diff --check
 ```
 
-The Python suite currently covers CLI/help/version behavior, profile package decisions, username/partition helper logic, disk-protection reasons, numeric menu parsing, plan-digest binding, unauthorized-drive refusal, extra-wipe gating, generated config decisions, and doctor/config coverage.
+GitHub run `35172528577` on commit `5fc333d5ee45c8c07787802c4605483f6d717b17` is the current hosted installer baseline: completeness PASS, Bash PASS, ShellCheck 0.9.0 PASS, 50/50 Python PASS, whitespace PASS. It includes the four resolver/identity/doctor audit regressions. Follow-up release-gate, reproducibility, hygiene, recovery-doc, and adversarial tests must receive their own exact-SHA hosted run after publication; local success is not substituted for that run.
 
-Destructive tools are mocked. The zero-wipe byte-count regression uses real `dd` only against an ordinary temporary file and verifies the exact resulting byte length. Tests must never discover, format, mount, partition, wipe, or overwrite a real block device.
+The final follow-up tree passes **68/68 tests locally** in a clean Git simulation, plus Bash syntax, YAML/JSON, Markdown relative links, repository hygiene, whitespace, release reproducibility, and fail-closed stable-gate fixtures. The installer bytes are unchanged from the hosted baseline. Local ShellCheck is unavailable, so the final published SHA still needs a hosted ShellCheck/CI run before this batch becomes authoritative.
 
-### Current automated status
+## One physical validation sequence
 
-Hosted run [35172143080](https://github.com/5897151/arch-skittles-installer/actions/runs/35172143080) tested `580532268d2e0e39f4671dd0b035b75ed3170e6f`: complete tree, Bash, ShellCheck 0.9.0, **46 tests**, and whitespace all PASS.
+Use the actual RC downloaded from GitHub after checksum and attestation verification. Record the RC tag, `SOURCE_COMMIT`, Arch ISO date, motherboard/firmware version, disk model without serial number, monitor arrangement, and network type.
 
-Follow-up resolver, partition revalidation and doctor corrections pass **50 local tests**; their hosted result and ShellCheck remain pending publication. See [RELEASE-DECISION.md](RELEASE-DECISION.md) for evidence and [RELEASE-AUDIT.md](RELEASE-AUDIT.md) for open audit work. Do not begin release sign-off from an untagged local checkout.
+1. Verify the current official Arch ISO and boot it in UEFI mode with Secure Boot disabled.
+2. Run the RC installer with `--check`; confirm package resolution, target hardware detection, DNS/time, and that no disks are written.
+3. Review disk inventory and exact destructive plan. Confirm only the intended unused internal target is selected.
+4. Perform a clean install and verify repeated LUKS unlock, cold boot, and warm reboot.
+5. Boot `linux`; verify Plasma Wayland, `nvidia-smi`, `vulkaninfo --summary`, audio, representative USB, Ethernet, Wi-Fi if applicable, DNS through `systemd-resolved`, IPv6 when available, and nftables.
+6. Run `skittles-doctor` as the normal user and with `sudo`.
+7. Perform multiple suspend/resume cycles; after each, verify NVIDIA/Wayland responsiveness and inspect warning/error logs.
+8. Boot `linux-lts` and repeat the kernel-dependent NVIDIA/Vulkan/network/firewall/doctor/suspend checks.
+9. For the gaming profile, test Steam login manually, a representative Proton title, `gamemoderun`, MangoHud, 32-bit NVIDIA/Vulkan, and NTSync behavior.
+10. Run a normal `pacman -Syu`; if kernel/NVIDIA/initramfs/GRUB components update, complete the update and reboot. Re-verify both kernels and NVIDIA/Wayland.
+11. Boot a current Arch ISO and execute `docs/RECOVERY.md` as written: unlock/mount/chroot, kernel/NVIDIA reinstall where appropriate, initramfs rebuild, GRUB repair/configuration, log inspection, clean exit/unmount, mapping close, and a Linux LTS recovery boot.
+12. Complete the repeated performance procedure in `docs/PERFORMANCE.md`.
 
-## Read-only hardware evidence sequence
+Do not rerun the installer to test updates or recovery.
 
-After installing the **downloaded RC artifact** on the target machine, capture a redacted evidence log. These commands are read-only; do not include drive serial numbers, Wi-Fi PSKs, or files from `/etc/NetworkManager/system-connections/`.
+## Read-only evidence capture
+
+Redact drive serials, MAC addresses, personal hostnames, usernames where unnecessary, and any identifying data. Never post passwords, Wi-Fi PSKs, private keys, or `/etc/NetworkManager/system-connections/*`.
+
+Useful checks include:
 
 ```bash
-printf 'SKITTLES release: '; cat /etc/skittles-release
-printf 'Kernel: '; uname -r
-printf 'CPU: '; lscpu | sed -n 's/^Model name:[[:space:]]*//p'
-printf 'Session: '; printf '%s\n' "${XDG_SESSION_TYPE:-unknown}"
-
-for p in /sys/devices/system/cpu/cpufreq/policy*; do
-  [ -r "$p/scaling_governor" ] || continue
-  printf '%s driver=' "$p"
-  cat "$p/scaling_driver" 2>/dev/null || printf 'unknown\n'
-  printf '%s governor=' "$p"
-  cat "$p/scaling_governor"
-  [ -r "$p/energy_performance_preference" ] && { printf '%s epp=' "$p"; cat "$p/energy_performance_preference"; }
-done
-
+cat /etc/skittles-release
+uname -r
+printf '%s\n' "${XDG_SESSION_TYPE:-unknown}"
 nvidia-smi
-cat /sys/module/nvidia_drm/parameters/modeset
-cat /sys/module/nvidia_drm/parameters/fbdev
 vulkaninfo --summary
 systemctl --failed
 resolvectl status
 findmnt -no TARGET,SOURCE,FSTYPE,OPTIONS /
 findmnt -no TARGET,SOURCE,FSTYPE,OPTIONS /boot
 swapon --show
-
 skittles-doctor
 sudo skittles-doctor
 sudo nft list ruleset
 ```
 
-For suspend/resume, perform multiple cycles rather than one success. After each cycle, verify `nvidia-smi`, Wayland responsiveness, video/game playback, and inspect relevant warnings:
+For suspend/resume evidence:
 
 ```bash
 journalctl -b -p warning..alert
 journalctl -b | grep -Ei 'NVRM|nvidia|suspend|resume|PM:'
 ```
 
-Record the RC tag, source commit, Arch ISO date, motherboard/firmware version, disk model **without serial**, monitor arrangement, network type, and package versions needed to reproduce the result.
+## Machine-readable sign-off
 
-## Virtual-machine tests
+`release-signoff.json` is the source consumed by the stable release gate. Update a key to `PASS` only after that exact physical test has passed on the downloaded RC. `FAIL`, `BLOCKED`, `WARN`, `NOT TESTED`, missing keys, malformed data, and empty values all block stable publication.
 
-A VM can validate generic control flow without claiming target hardware support. Appropriate VM checks include:
+The mandatory keys cover install/boot/LUKS, both kernels, Wayland/NVIDIA/Vulkan, networking/firewall/audio/USB, suspend/resume, update/post-update boots, doctor, Steam/Proton/32-bit graphics/GameMode/MangoHud/NTSync, recovery, and performance.
 
-- UEFI boot of the installed GRUB layout;
-- LUKS unlock and ext4 root mounting;
-- main/LTS kernel menu entries;
-- generated services/config files;
-- failure cleanup and reboot behavior;
-- recovery-document procedure mechanics using disposable virtual disks.
+When performance testing is complete, set `performance_measurements` to `PASS` and record the SHA-256 of the completed `docs/PERFORMANCE.md` in `evidence.performance_sha256`:
 
-A VM does **not** prove RTX 3060 Ti NVIDIA acceleration, current NVIDIA suspend behavior, i7-8700K power policy, physical firmware NVRAM behavior, or real SATA/NVMe wipe/sanitize properties.
+```bash
+sha256sum docs/PERFORMANCE.md
+```
 
-## Required real-hardware tests
+If the performance document changes afterward, the stable gate fails until the evidence hash is deliberately updated after review.
 
-Use the exact RC release artifact on the supported i7-8700K + RTX 3060 Ti system. Record Arch ISO date, firmware version/state, disk model, profile, SKITTLES version/tag/commit, and package versions.
+## Current physical status
 
-At minimum test:
-
-- clean install from current verified Arch ISO;
-- cold boot and warm reboot;
-- repeated LUKS unlocks;
-- `linux` and `linux-lts` boots;
-- Plasma Wayland login/logout and screen lock/unlock;
-- NVIDIA module load, `nvidia-smi`, Vulkan, and sustained GPU load;
-- multi-hour idle and sustained CPU load;
-- Ethernet, DHCP renewal, DNS via `systemd-resolved`, IPv6 if available, and ordinary connectivity through nftables;
-- audio and representative USB devices;
-- suspend and resume, including repeated cycles;
-- gaming profile: Steam, Proton game, GameMode, MangoHud, NTSync, 32-bit Vulkan/NVIDIA;
-- package full upgrade, kernel update, NVIDIA update, then both-kernel boots;
-- `skittles-doctor` as user and root before/after updates;
-- complete Arch-ISO recovery path from [RECOVERY.md](RECOVERY.md);
-- if possible, a second clean install from the exact release artifact rather than a working-tree copy.
-
-## Release sign-off table
-
-Do not change `NOT TESTED` to `PASS` without a recorded run on the target hardware.
-
-| Test | `linux` | `linux-lts` |
-| --- | --- | --- |
-| Boot | NOT TESTED | NOT TESTED |
-| LUKS unlock | NOT TESTED | NOT TESTED |
-| Plasma Wayland | NOT TESTED | NOT TESTED |
-| NVIDIA module / `nvidia-smi` | NOT TESTED | NOT TESTED |
-| Vulkan | NOT TESTED | NOT TESTED |
-| Ethernet / DHCP / DNS | NOT TESTED | NOT TESTED |
-| nftables ordinary connectivity | NOT TESTED | NOT TESTED |
-| Audio / USB | NOT TESTED | NOT TESTED |
-| Suspend / resume | NOT TESTED | NOT TESTED |
-| Post-update boot | NOT TESTED | NOT TESTED |
-| `skittles-doctor` | NOT TESTED | NOT TESTED |
-
-Gaming profile additional sign-off:
-
-| Test | Status |
-| --- | --- |
-| Steam starts/signs in | NOT TESTED |
-| Proton game launches | NOT TESTED |
-| 32-bit NVIDIA/Vulkan | NOT TESTED |
-| GameMode active for launched game | NOT TESTED |
-| MangoHud | NOT TESTED |
-| NTSync | NOT TESTED |
-
-Recovery sign-off:
-
-| Test | Status |
-| --- | --- |
-| Unlock/mount/chroot from current Arch ISO | NOT TESTED |
-| Reinstall both kernels/NVIDIA packages | NOT TESTED |
-| Rebuild initramfs | NOT TESTED |
-| Repair GRUB normal + fallback paths | NOT TESTED |
-| Boot `linux-lts` recovery entry | NOT TESTED |
-| Clean unmount + close mapping | NOT TESTED |
+All mandatory `release-signoff.json` entries are currently `NOT TESTED`. Automated/static PASS results must not be copied into physical sign-off fields.

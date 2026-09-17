@@ -114,7 +114,7 @@ class ProfileTests(unittest.TestCase):
 class PureShellFunctionTests(unittest.TestCase):
     def test_valid_username(self):
         valid = ["alice", "_service", "a1", "user-name", "user_name"]
-        invalid = ["root", "Auser", "1user", "has space", "", "x" * 33]
+        invalid = ["root", "Auser", "1user", "has space", "", "x" * 33, "usér", "user;id", "user*"]
         for username in valid:
             with self.subTest(username=username):
                 self.assertEqual(run_bash(f"valid_username {shlex.quote(username)}").returncode, 0)
@@ -146,10 +146,46 @@ class PureShellFunctionTests(unittest.TestCase):
         good = run_bash(body + "menu_index 2")
         self.assertEqual(good.returncode, 0)
         self.assertEqual(good.stdout, "1")
-        for value in ["0", "4", "1+1", "1[0]", "-1", "abc", "1000"]:
+        for value in ["", "0", "4", "1+1", "1[0]", "-1", "abc", "1000", "999999999999999999999", "*", "$(id)", "２"]:
             with self.subTest(value=value):
                 proc = run_bash(body + f"menu_index {shlex.quote(value)}")
                 self.assertNotEqual(proc.returncode, 0)
+
+    def test_choose_extras_rejects_target_duplicates_and_malformed_input(self):
+        setup = """
+DRIVES=(/dev/sda /dev/sdb /dev/sdc)
+DRIVE_REASONS=('' '' '')
+TARGET_INDEX=0
+"""
+        good = run_bash(setup + "choose_extras '2 3'; printf '%s ' \"${EXTRA_INDICES[@]}\"")
+        self.assertEqual(good.returncode, 0, good.stderr)
+        self.assertEqual(good.stdout, "1 2 ")
+        for value in ["1", "2 2", "0", "-1", "1+1", "*", "$(id)", "９"]:
+            with self.subTest(value=value):
+                proc = run_bash(setup + f"choose_extras {shlex.quote(value)}")
+                self.assertNotEqual(proc.returncode, 0)
+
+    def test_plan_digest_changes_with_device_path_and_extra_order(self):
+        setup = """
+PROFILE=minimal
+WIPE_MODE=zero
+ALLOW_DISCARDS=0
+TARGET_INDEX=0
+DRIVES=(/dev/sda /dev/sdb /dev/sdc)
+DRIVE_IDS=(id-a id-b id-c)
+DRIVE_BYTES=(100 200 300)
+EXTRA_INDICES=(1 2)
+"""
+        mutations = [
+            "DRIVES[0]=/dev/sdz",
+            "TARGET_INDEX=1",
+            "EXTRA_INDICES=(2 1)",
+            "DRIVE_IDS[0]='8:0 100 model changed wwn'",
+        ]
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                proc = run_bash(setup + f"a=$(plan_digest); {mutation}; b=$(plan_digest); [[ $a != $b ]]")
+                self.assertEqual(proc.returncode, 0, proc.stderr)
 
     def test_plan_digest_is_stable_and_bound_to_plan(self):
         setup = """
@@ -190,8 +226,49 @@ assert_authorized_drive /dev/sdb id-b 200
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("not in the confirmed plan", proc.stderr)
 
+    def test_disk_identity_binds_major_minor_size_model_serial_and_wwn(self):
+        function = re.search(r"^disk_identity\(\) \{\n.*?^\}", TEXT, re.M | re.S).group(0)
+        self.assertIn("MAJ:MIN,SIZE,MODEL,SERIAL,WWN", function)
+
 
 class DestructivePathMockTests(unittest.TestCase):
+    def test_destructive_functions_keep_plan_and_identity_guards(self):
+        def function(name):
+            return re.search(rf"^{name}\(\) \{{\n.*?^\}}", TEXT, re.M | re.S).group(0)
+
+        clear = function("clear_disk")
+        self.assertIn("require_approved_plan", clear)
+        self.assertIn("assert_authorized_drive", clear)
+        self.assertIn("assert_same_disk", clear)
+        for command in ("dd if=/dev/zero", "wipefs --all", "sgdisk --zap-all"):
+            self.assertIn(command, clear)
+
+        partition = function("wipe_and_partition")
+        self.assertIn("require_approved_plan", partition)
+        self.assertIn("assert_target_binding", partition)
+        self.assertIsNotNone(re.search(r"clear_disk.*?assert_same_disk.*?sgdisk --clear", partition, re.S))
+
+        format_mount = function("format_and_mount")
+        self.assertIn("require_approved_plan", format_mount)
+        self.assertIn("assert_target_binding", format_mount)
+        self.assertIn("assert_same_disk", format_mount)
+        self.assertIn("Partition parents do not match", format_mount)
+        self.assertIn("cryptsetup luksFormat", format_mount)
+
+        extras = function("wipe_extra_drives")
+        self.assertIn("ARCH_INSTALLED", extras)
+        self.assertIn("clear_disk", extras)
+
+    def test_credentials_stay_off_chroot_argv_and_xtrace(self):
+        install = re.search(r"^install_system\(\) \{\n.*?^\}", TEXT, re.M | re.S).group(0)
+        main = re.search(r"^main\(\) \{\n.*?^\}", TEXT, re.M | re.S).group(0)
+        self.assertIn("printf '%s\\0%s\\0'", install)
+        arch_line = next(line for line in install.splitlines() if "arch-chroot" in line)
+        self.assertNotIn("PASSWORD", arch_line)
+        self.assertIn("set +xv", main)
+        self.assertIn("export -n USER_PASSWORD ROOT_PASSWORD LUKS_PASSWORD", main)
+        self.assertNotIn("eval ", TEXT)
+
     def test_zero_wipe_writes_exact_bytes_only_to_temp_file(self):
         with tempfile.TemporaryDirectory() as td:
             target = Path(td) / "ordinary-file.bin"

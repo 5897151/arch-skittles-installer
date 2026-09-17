@@ -57,7 +57,7 @@ jobs:
 
           rm -rf dist
           mkdir -p "dist/${bundle}"
-          cp skittles-installer.sh README.md LICENSE CHANGELOG.md SECURITY.md CONTRIBUTING.md "dist/${bundle}/"
+          cp skittles-installer.sh README.md LICENSE CHANGELOG.md SECURITY.md CONTRIBUTING.md release-signoff.json "dist/${bundle}/"
           chmod 0755 "dist/${bundle}/skittles-installer.sh"
           cp -R docs "dist/${bundle}/"
           printf '%s\n' "$GITHUB_SHA" > "dist/${bundle}/SOURCE_COMMIT"
@@ -96,18 +96,8 @@ jobs:
           if [[ $version == *-* ]]; then
             release_flags+=(--prerelease)
           else
-            if grep -Eq '\|[[:space:]]*NOT TESTED[[:space:]]*\|' docs/TESTING.md; then
-              echo "Stable release blocked: hardware sign-off table still contains NOT TESTED." >&2
-              exit 1
-            fi
-            if grep -q '\*\*NOT TESTED on release hardware\.\*\*' docs/PERFORMANCE.md; then
-              echo "Stable release blocked: performance measurements are not recorded." >&2
-              exit 1
-            fi
-            if grep -q 'DRAFT:' "$notes_file"; then
-              echo "Stable release blocked: release notes are still marked DRAFT." >&2
-              exit 1
-            fi
+            python3 scripts/check_release_signoff.py \
+              release-signoff.json docs/PERFORMANCE.md "$notes_file"
           fi
 
           gh release create "$GITHUB_REF_NAME" \

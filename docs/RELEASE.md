@@ -1,126 +1,92 @@
 # Release Process
 
-SKITTLES uses Semantic Versioning. The current source identifies itself as `1.0.0-rc.1`; it must not be tagged or described as stable `1.0.0` until every stable gate is satisfied.
+SKITTLES uses Semantic Versioning. The current source remains `1.0.0-rc.1`; there is no existing tag or GitHub release, so that RC number has not been consumed.
 
-## Version agreement
+## Version and prerequisite agreement
 
-For a release, these must agree exactly:
+For any release, all of these must agree: `VERSION` in `skittles-installer.sh`, the Git tag without its leading `v`, curated `docs/RELEASE-NOTES-vTAG.md`, and the release asset names. The workflow also requires a non-empty owner-selected `LICENSE` before either RC or stable publication.
 
-- `VERSION` in `skittles-installer.sh`;
-- `/etc/skittles-release` produced by that installer;
-- the Git tag without its leading `v`;
-- release title/notes;
-- release bundle directory/name.
+The release job alone receives write/OIDC/attestation permissions. Repository-level workflow permissions remain `contents: read`, checkout does not persist credentials, and first-party Actions are pinned to full commit SHAs.
 
-Automated tests should fail on a mismatch that can be checked without hardware.
+## Stable release sign-off
 
-## Stable release gates
+`release-signoff.json` is the machine-readable stable gate. It intentionally starts with every physical result as `NOT TESTED`.
 
-`v1.0.0` is blocked until all of the following are recorded as passing:
+For `v1.0.0`, `scripts/check_release_signoff.py` requires:
 
-- CI, including Bash syntax, ShellCheck, full tests, and release consistency checks;
-- clean install on the i7-8700K + RTX 3060 Ti target from the RC artifact;
-- both `linux` and `linux-lts` boot;
-- reliable LUKS unlock;
-- NVIDIA and Plasma Wayland;
-- networking, DHCP renewal, DNS, IPv6 where available, and nftables ordinary connectivity;
-- gaming-profile Steam/Proton/GameMode/MangoHud/NTSync/32-bit Vulkan tests;
-- suspend/resume;
-- documented recovery procedure;
-- full package/kernel/NVIDIA update and subsequent boots;
-- no unresolved blocker or secret finding;
-- owner-authorized license;
-- verifiable release artifact/checksum/provenance path.
+- schema and release identifiers exactly matching the expected stable format;
+- the complete mandatory key set, with no missing, renamed, or extra key;
+- every mandatory status exactly `PASS` (so `NOT TESTED`, `FAIL`, `BLOCKED`, `WARN`, and empty/unknown values all block);
+- `performance_measurements=PASS` plus `evidence.performance_sha256` matching the actual `docs/PERFORMANCE.md` bytes;
+- stable release notes with the `DRAFT:` marker removed.
 
-See [TESTING.md](TESTING.md) for the sign-off matrix.
+Malformed or missing sign-off data fails closed. RC publication intentionally does not require hardware PASS, because an RC is the artifact used to obtain that hardware evidence; however, the license and tag/version prerequisites still apply.
 
-## License blocker
+When physical testing is completed, update the human-readable tables in `docs/TESTING.md`/`docs/PERFORMANCE.md` and the corresponding machine-readable status together. Do not mark a field PASS from static inspection alone.
 
-No license is currently authorized by the repository owner. Do not invent a copyright holder or silently select a license. Common choices the owner can consider:
+## Safe pre-tag validation
 
-- **MIT** — short permissive license allowing reuse/modification with attribution/license notice.
-- **Apache-2.0** — permissive license with explicit patent grant and more detailed terms.
-- **GPL-3.0-or-later** — strong copyleft requiring distributed derivative works to remain under compatible GPL terms and provide corresponding source.
+From a clean checkout:
 
-Until the owner chooses and adds the actual license text, the project should not call itself open source and stable `v1.0.0` remains blocked.
+```bash
+bash -n skittles-installer.sh
+shellcheck skittles-installer.sh
+python3 -m unittest discover -s tests -v
+python3 scripts/audit_repository.py
+git diff --check
+```
 
+CI additionally requires the critical documentation/test/release files to exist, preventing an accidentally reduced test tree from producing a misleading green run.
 
-## GitHub Actions supply-chain choices
+## Reproducible release assets
 
-The repository uses only first-party GitHub Actions in the release path:
+The tag workflow builds the end-user bundle with sorted paths, the source commit timestamp as archive mtime, numeric owner/group 0, and `gzip -n`. It writes deterministic `SOURCE_COMMIT`, makes the installer executable, generates `SHA256SUMS`, and immediately runs `sha256sum -c`.
 
-- `actions/checkout` reads the tagged source. It is pinned to a full commit SHA and `persist-credentials: false` prevents the checkout step from leaving write credentials in the local Git config.
-- `actions/attest` creates provenance for the built release assets. It is pinned to a full commit SHA and receives `id-token`, `attestations`, and artifact-metadata write permissions only in the tag-only release job.
+Automated regression tests execute that exact build step twice from the same fixed source identity and require identical tarball SHA-256 values.
 
-No third-party Marketplace Action is used for shell commands, checksum generation, archiving, or publishing. The GitHub CLI already present on the hosted runner publishes the release. Dependabot is configured to review GitHub Actions updates.
+The tarball deliberately contains:
 
-The release workflow intentionally refuses to publish anything until a non-empty `LICENSE` exists and the pushed tag exactly matches the installer's `VERSION`. It also requires tag-specific curated notes (`docs/RELEASE-NOTES-vTAG.md`); stable tags are blocked while hardware sign-off rows remain `NOT TESTED`, performance measurements remain unrecorded, or the stable notes retain their `DRAFT` marker.
+- `skittles-installer.sh`;
+- `README.md`;
+- `LICENSE`;
+- `CHANGELOG.md`;
+- `SECURITY.md`;
+- `CONTRIBUTING.md`;
+- `release-signoff.json`;
+- `docs/`;
+- `SOURCE_COMMIT`.
+
+Development-only `.github/`, `tests/`, caches, and local build output are excluded from the public release archive. The repository test suite itself must remain present in GitHub.
 
 ## Release-candidate procedure
 
-1. Ensure the working tree is clean and the intended RC version is committed.
-2. Run all safe automated tests and CI.
-3. Search the tree/history available to the maintainer for credentials, Wi-Fi secrets, test passwords, private paths, personal hostnames, API keys, generated junk, and unexplained binaries.
-4. Build the release bundle from the committed tag, not from an uncommitted working tree.
-5. Generate `SHA256SUMS` for release assets.
-6. Generate GitHub artifact provenance when the repository/workflow supports it.
-7. Verify the downloaded RC artifact independently on another machine/context.
-8. Install the RC artifact on the real target and complete [TESTING.md](TESTING.md).
-9. Use the machine normally, including suspend/resume and updates; do not promote immediately after unit tests.
-10. If fixes are needed, increment the pre-release (`rc.2`, etc.) and repeat relevant gates.
-
-## Release bundle contents
-
-The published tarball is an end-user release bundle, not a mirror of the development checkout. It contains `skittles-installer.sh`, `README.md`, `LICENSE`, `CHANGELOG.md`, `SECURITY.md`, `CONTRIBUTING.md`, the `docs/` tree, and `SOURCE_COMMIT`. The installer inside the archive is executable. Development-only material such as `.github/`, `tests/`, caches, editor files, and local build output is excluded.
-
-## Artifact verification concepts
-
-### Integrity checksum
-
-A published `SHA256SUMS` lets a user detect accidental or mismatched bytes:
+1. Resolve the owner license and commit the actual `LICENSE`.
+2. Ensure the intended RC source is clean, reviewed, and green on hosted CI.
+3. Confirm no immutable tag/release already uses the RC version.
+4. Create the RC tag on the exact green commit; never move an existing public tag.
+5. Let the tag-only workflow rerun validation, build assets, checksum them, attest them, and publish the prerelease.
+6. Download the published assets as an ordinary user and run `sha256sum -c SHA256SUMS`.
+7. Verify provenance against the expected repository/workflow, for example:
 
 ```bash
-sha256sum -c SHA256SUMS
+gh attestation verify skittles-VERSION.tar.gz \
+  -R 5897151/arch-skittles-installer \
+  --signer-workflow 5897151/arch-skittles-installer/.github/workflows/release.yml
 ```
 
-If the checksum file and artifact are both replaced at the same compromised origin, the checksum alone does not prove authenticity.
+8. Perform all physical validation from those downloaded RC bytes, not a newer workspace.
+9. If code changes are needed after a published RC, increment the RC number instead of moving the tag.
 
-### Git tag/signature
+## Stable promotion
 
-A Git tag identifies the source commit. If the maintainer signs tags and users validate the signing identity, that can add source authenticity. SKITTLES does not claim signed tags until the owner actually configures and publishes them.
+Only create `v1.0.0` when every `release-signoff.json` key is PASS, performance evidence is SHA-bound, stable notes are no longer draft, exact-source hosted CI is green, and the owner accepts the release evidence. The stable workflow will independently re-run the fail-closed validator.
 
-### GitHub artifact provenance
+After publishing stable, independently download and re-verify checksums and attestation. Provenance proves build identity, not correctness; source review and hardware/recovery evidence remain distinct.
 
-When the release workflow generates a GitHub artifact attestation, users can verify that a specific artifact was produced by the expected repository/workflow/commit. For this repository:
+## Repository hygiene
 
-```bash
-gh attestation verify skittles-VERSION.tar.gz -R 5897151/arch-skittles-installer --signer-workflow 5897151/arch-skittles-installer/.github/workflows/release.yml
-```
+Before tags, review the current tree and available history for credentials, Wi-Fi secrets, private keys, personal machine data, generated junk, unexpected binaries, or transfer artifacts. CI's hygiene scanner covers common current-tree patterns but cannot prove every possible secret or replace GitHub secret scanning/push protection.
 
-Provenance does **not** prove the installer is safe or bug-free. It proves the artifact is tied to the recorded build identity.
+## Upgrade policy
 
-### Source review
-
-For a root/destructive installer, source review remains important even when checksums and attestations verify perfectly. Pay special attention to drive selection/confirmation, `clear_disk`, partitioning, cryptsetup, chroot-generated configuration, bootloader commands, and release workflow.
-
-## Git/repository hygiene
-
-Before publishing a tag:
-
-- working tree clean;
-- no generated cache/junk files;
-- no credentials, test passwords, Wi-Fi secrets, personal hostnames, API keys, or private paths;
-- no unexplained binary blobs;
-- no editor swap/backup files;
-- review history for accidentally committed secrets when the complete history is available;
-- enable secret scanning and push protection on the public repository;
-- enable Private Vulnerability Reporting;
-- enable code scanning when it provides actionable signal.
-
-## Real GitHub validation record
-
-See [RELEASE-DECISION.md](RELEASE-DECISION.md) for exact evidence. Hosted run `35172143080` on `580532268d2e0e39f4671dd0b035b75ed3170e6f` passed the complete 46-test baseline, Bash, ShellCheck 0.9.0, tree completeness and whitespace. Follow-up fixes pass 50 tests locally but have no hosted result yet. No release provenance is claimed from the existence of an attestation step.
-
-## Current status
-
-`1.0.0-rc.1` remains a release candidate. Hardware sign-off and license selection are not complete, so `v1.0.0` is not authorized.
+SKITTLES is a destructive fresh installer. Never rerun it as an upgrade or repair mechanism. Update an installed system with normal Arch full upgrades (`pacman -Syu`) and use `docs/RECOVERY.md` when recovery is required.

@@ -1,5 +1,10 @@
 from pathlib import Path
+import hashlib
+import os
 import re
+import shutil
+import subprocess
+import tarfile
 import unittest
 import yaml
 
@@ -25,6 +30,8 @@ class GitHubInfrastructureTests(unittest.TestCase):
         self.assertIn("bash -n skittles-installer.sh", text)
         self.assertIn("shellcheck skittles-installer.sh", text)
         self.assertIn("python3 -m unittest discover -s tests -v", text)
+        self.assertIn("release-signoff.json", text)
+        self.assertIn("scripts/check_release_signoff.py", text)
 
     def test_external_actions_are_first_party_and_sha_pinned(self):
         for path in (CI, RELEASE):
@@ -54,13 +61,100 @@ class GitHubInfrastructureTests(unittest.TestCase):
         self.assertIn("actions/attest@", text)
         self.assertIn("gh release create", text)
 
+    def test_release_prerequisites_execute_fail_closed(self):
+        data = yaml.safe_load(RELEASE.read_text(encoding="utf-8"))
+        step = next(
+            item for item in data["jobs"]["release"]["steps"]
+            if item.get("name") == "Require release prerequisites and matching version"
+        )
+        license_path = ROOT / "LICENSE"
+        self.assertFalse(license_path.exists(), "owner-selected LICENSE must remain absent before owner choice")
+        env = os.environ.copy()
+        env["GITHUB_REF_NAME"] = "v1.0.0-rc.1"
+        missing = subprocess.run(["bash", "-c", step["run"]], cwd=ROOT, env=env, text=True, capture_output=True)
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn("LICENSE is required", missing.stderr)
+        try:
+            license_path.write_text("test-only license fixture\n", encoding="utf-8")
+            matching = subprocess.run(["bash", "-c", step["run"]], cwd=ROOT, env=env, text=True, capture_output=True)
+            self.assertEqual(matching.returncode, 0, matching.stderr)
+            env["GITHUB_REF_NAME"] = "v1.0.0-rc.9"
+            mismatch = subprocess.run(["bash", "-c", step["run"]], cwd=ROOT, env=env, text=True, capture_output=True)
+            self.assertNotEqual(mismatch.returncode, 0)
+            self.assertIn("does not match installer VERSION", mismatch.stderr)
+        finally:
+            license_path.unlink(missing_ok=True)
+
     def test_release_bundle_contains_required_public_files(self):
         text = RELEASE.read_text(encoding="utf-8")
-        for item in ["skittles-installer.sh", "README.md", "LICENSE", "CHANGELOG.md", "SECURITY.md", "docs"]:
+        for item in ["skittles-installer.sh", "README.md", "LICENSE", "CHANGELOG.md", "SECURITY.md", "docs", "release-signoff.json"]:
             with self.subTest(item=item):
                 self.assertIn(item, text)
         self.assertIn('chmod 0755 "dist/${bundle}/skittles-installer.sh"', text)
         self.assertNotIn('cp -R docs tests', text)
+
+    def test_release_asset_recipe_is_byte_reproducible_and_clean(self):
+        data = yaml.safe_load(RELEASE.read_text(encoding="utf-8"))
+        step = next(
+            item for item in data["jobs"]["release"]["steps"]
+            if item.get("name") == "Build reproducible release assets"
+        )
+        license_path = ROOT / "LICENSE"
+        dist = ROOT / "dist"
+        self.assertFalse(license_path.exists(), "owner-selected LICENSE must remain absent before owner choice")
+        env = os.environ.copy()
+        env.update(
+            GITHUB_REF_NAME="v1.0.0-rc.1",
+            GITHUB_SHA="0123456789abcdef0123456789abcdef01234567",
+        )
+        hashes = []
+        try:
+            license_path.write_text("test-only license fixture\n", encoding="utf-8")
+            for _ in range(2):
+                proc = subprocess.run(
+                    ["bash", "-c", step["run"]], cwd=ROOT, env=env,
+                    text=True, capture_output=True,
+                )
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                archive = dist / "skittles-1.0.0-rc.1.tar.gz"
+                hashes.append(hashlib.sha256(archive.read_bytes()).hexdigest())
+                with tarfile.open(archive, "r:gz") as tf:
+                    names = tf.getnames()
+                    root = "skittles-1.0.0-rc.1"
+                    required = {
+                        f"{root}/skittles-installer.sh",
+                        f"{root}/README.md",
+                        f"{root}/LICENSE",
+                        f"{root}/CHANGELOG.md",
+                        f"{root}/SECURITY.md",
+                        f"{root}/CONTRIBUTING.md",
+                        f"{root}/release-signoff.json",
+                        f"{root}/SOURCE_COMMIT",
+                    }
+                    self.assertTrue(required <= set(names))
+                    self.assertFalse(any(name.startswith(f"{root}/tests/") for name in names))
+                    self.assertFalse(any(name.startswith(f"{root}/.github/") for name in names))
+                    mode = tf.getmember(f"{root}/skittles-installer.sh").mode & 0o777
+                    self.assertEqual(mode, 0o755)
+                    source = tf.extractfile(f"{root}/SOURCE_COMMIT").read().decode().strip()
+                    self.assertEqual(source, env["GITHUB_SHA"])
+                verify = subprocess.run(
+                    ["sha256sum", "-c", "SHA256SUMS"], cwd=dist,
+                    text=True, capture_output=True,
+                )
+                self.assertEqual(verify.returncode, 0, verify.stderr)
+            self.assertEqual(hashes[0], hashes[1])
+        finally:
+            license_path.unlink(missing_ok=True)
+            shutil.rmtree(dist, ignore_errors=True)
+
+    def test_repository_hygiene_scanner_passes_current_tree(self):
+        proc = subprocess.run(
+            ["python3", "scripts/audit_repository.py"], cwd=ROOT,
+            text=True, capture_output=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("Repository hygiene: PASS", proc.stdout)
 
     def test_bug_template_contains_release_and_redaction_fields(self):
         text = (ROOT / ".github/ISSUE_TEMPLATE/bug_report.yml").read_text(encoding="utf-8")

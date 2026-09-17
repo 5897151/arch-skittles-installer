@@ -31,7 +31,7 @@ A LUKS-header backup can recover metadata damage, but it must be stored on a **d
 ```bash
 cryptsetup luksDump /dev/REPLACE_WITH_ACTUAL_LUKS_ROOT_PARTITION
 findmnt /run/media/REPLACE_WITH_TRUSTED_BACKUP_MOUNT
-sudo cryptsetup luksHeaderBackup \
+cryptsetup luksHeaderBackup \
   /dev/REPLACE_WITH_ACTUAL_LUKS_ROOT_PARTITION \
   --header-backup-file /run/media/REPLACE_WITH_TRUSTED_BACKUP_MOUNT/skittles-luks-header.img
 chmod 600 /run/media/REPLACE_WITH_TRUSTED_BACKUP_MOUNT/skittles-luks-header.img
@@ -46,7 +46,8 @@ cryptsetup open /dev/REPLACE_WITH_ACTUAL_LUKS_ROOT_PARTITION skittles-root
 mount /dev/mapper/skittles-root /mnt
 mkdir -p /mnt/boot
 mount /dev/REPLACE_WITH_ACTUAL_EFI_PARTITION /mnt/boot
-findmnt /mnt /mnt/boot
+findmnt -T /mnt
+findmnt -T /mnt/boot
 ```
 
 Before chrooting, confirm `/mnt` is ext4 from `/dev/mapper/skittles-root` and `/mnt/boot` is the expected vfat partition.
@@ -59,20 +60,15 @@ Connect the live ISO first. Verify:
 getent hosts archlinux.org
 ```
 
-The installed `/etc/resolv.conf` points to the `systemd-resolved` stub. For chroot recovery, create a temporary stub file from the live ISO resolver if DNS is otherwise unavailable inside the chroot:
-
-```bash
-mkdir -p /mnt/run/systemd/resolve
-cp -L /etc/resolv.conf /mnt/run/systemd/resolve/stub-resolv.conf
-```
-
-This temporary file is only for the recovery environment; `/run` is recreated at boot.
+Do not manually populate `/mnt/run` or replace the installed resolver symlink before entering the chroot. Current `arch-chroot` sets up the required API filesystems and temporarily supplies the live environment's resolver to the chroot. This preserves live-ISO DNS for package repair without rewriting the installed resolver configuration.
 
 ## 5. Enter the installed system
 
 ```bash
 arch-chroot /mnt
 ```
+
+If DNS unexpectedly fails inside the chroot, exit and fix networking/resolution in the live ISO first instead of inventing a second resolver layout under `/mnt/run`.
 
 Inside the chroot, inspect the recorded release and package state:
 

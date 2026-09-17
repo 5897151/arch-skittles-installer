@@ -11,13 +11,20 @@ SKITTLES follows Semantic Versioning. This changelog is structured after Keep a 
 - Report failed-service query errors as failures instead of an empty successful result; skip the graphical-session check from a text console.
 
 
+### Release engineering
+
+- Replaced weak stable-release marker greps with a fail-closed machine-readable sign-off validator: every mandatory physical/recovery/performance key must be present and `PASS`, performance evidence is SHA-256-bound, and draft stable notes are rejected.
+- Added executable negative release-gate fixtures, tag/license prerequisite tests, byte-reproducible release-asset testing, and a current-tree repository hygiene guard.
+- Expanded adversarial disk-plan/input regression coverage without changing installer behavior.
+- Updated recovery resolver guidance to rely on current `arch-chroot` resolver/API-filesystem handling instead of a manual `/mnt/run` copy workaround.
+
 ### Known Issues
 
 - Stable release is blocked until an owner-authorized software license is selected.
 - Real i7-8700K + RTX 3060 Ti release-candidate installation, suspend/resume, recovery, gaming, update, and both-kernel sign-off are not yet recorded.
 - Performance changes have no target-hardware benchmark results yet.
 
-## [1.0.0-rc.1] - 2026-09-17
+## [1.0.0-rc.1] - Unreleased
 
 ### Added
 

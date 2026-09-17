@@ -48,6 +48,10 @@ The gaming profile adds Steam, 32-bit NVIDIA/Vulkan libraries, GameMode, MangoHu
 
 Both Arch `linux` and `linux-lts` are installed with matching NVIDIA open kernel modules. GRUB includes the normal UEFI entry and removable fallback path. `docs/RECOVERY.md` documents current-Arch-ISO recovery, LUKS unlock, chroot, package/NVIDIA reinstall, initramfs rebuild, GRUB repair, LTS recovery boot and safe cleanup.
 
+## Automated validation
+
+The corrected installer baseline passed hosted GitHub CI with repository completeness, Bash syntax, ShellCheck 0.9.0, 50/50 tests, and whitespace checks. Follow-up release engineering adds fail-closed stable sign-off, deterministic-asset regression coverage, repository hygiene checks, adversarial input tests, and corrected recovery resolver guidance. Physical validation remains separate and `NOT TESTED`.
+
 ## Known limitations
 
 - Real-hardware RC sign-off is still `NOT TESTED` for both kernels, Wayland/NVIDIA/Vulkan, suspend/resume, networking/firewall, gaming and recovery.
