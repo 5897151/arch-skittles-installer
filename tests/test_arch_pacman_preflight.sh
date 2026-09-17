@@ -40,6 +40,12 @@ download_user=$(sed -n 's/^[[:space:]]*DownloadUser[[:space:]]*=[[:space:]]*\([^
 [[ -n $download_user ]] || { echo 'Current Arch pacman.conf has no active DownloadUser; integration assumptions changed.' >&2; exit 1; }
 getent passwd "$download_user" >/dev/null || { echo "Configured pacman DownloadUser does not exist: $download_user" >&2; exit 1; }
 
+active_sandbox_policy() {
+    grep -E '^[[:space:]]*(DisableSandbox|DisableSandboxFilesystem|DisableSandboxSyscalls)([[:space:]]|$)' "$1" || true
+}
+
+source_sandbox_policy=$(active_sandbox_policy /etc/pacman.conf)
+
 for PROFILE in minimal gaming; do
     configure_packages
     prepare_preflight_pacman_workspace
@@ -49,8 +55,13 @@ for PROFILE in minimal gaming; do
     [[ $(stat -c '%a' "$WORKDIR/cache") == 755 ]] || { echo 'CacheDir parent is not 0755.' >&2; exit 1; }
     copied_user=$(sed -n 's/^[[:space:]]*DownloadUser[[:space:]]*=[[:space:]]*\([^#[:space:]]\+\).*/\1/p' "$WORKDIR/pacman.conf" | tail -n1)
     [[ $copied_user == "$download_user" ]] || { echo 'Preflight config changed DownloadUser.' >&2; exit 1; }
-    ! grep -Eq '^[[:space:]]*DisableSandbox([[:space:]]|$)' "$WORKDIR/pacman.conf" || { echo 'Preflight config disables pacman sandbox.' >&2; exit 1; }
-    ! grep -Eq '^[[:space:]]*DisableSandbox(Filesystem|Syscalls)([[:space:]]|$)' "$WORKDIR/pacman.conf" || { echo 'Preflight config partially disables pacman sandbox.' >&2; exit 1; }
+    copied_sandbox_policy=$(active_sandbox_policy "$WORKDIR/pacman.conf")
+    [[ $copied_sandbox_policy == "$source_sandbox_policy" ]] || {
+        echo 'Preflight config changed the source pacman sandbox policy.' >&2
+        printf 'SOURCE SANDBOX POLICY:\n%s\nCOPIED SANDBOX POLICY:\n%s\n' \
+            "${source_sandbox_policy:-<none>}" "${copied_sandbox_policy:-<none>}" >&2
+        exit 1
+    }
 
     sync_log="$WORKDIR/pacman-sync.log"
     if ! pacman --config "$WORKDIR/pacman.conf" \

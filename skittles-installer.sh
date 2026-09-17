@@ -957,6 +957,10 @@ check_mount_option() {
     options=$(findmnt -n -o OPTIONS "$target" 2>/dev/null || true)
     if [[ ,$options, == *,$option,* ]]; then pass "$label"; else fail "$label"; fi
 }
+user_in_group() {
+    local user=$1 group=$2
+    id -nG "$user" | tr ' ' '\n' | grep -Fxq -- "$group"
+}
 
 printf 'SKITTLES / local health check\n'
 if [[ -r /etc/skittles-release ]]; then cat /etc/skittles-release; else fail '/etc/skittles-release readable'; fi
@@ -980,10 +984,10 @@ else
     fail 'Secure Boot EFI variable readable'
 fi
 check 'encrypted-root mapping active' test -b /dev/mapper/skittles-root
-check 'root filesystem is ext4' bash -c '[[ $(findmnt -n -o FSTYPE /) == ext4 ]]'
-check 'root mounted from skittles-root mapping' bash -c '[[ $(findmnt -n -o SOURCE /) == /dev/mapper/skittles-root ]]'
+check 'root filesystem is ext4' test "$(findmnt -n -o FSTYPE / 2>/dev/null)" = ext4
+check 'root mounted from skittles-root mapping' test "$(findmnt -n -o SOURCE / 2>/dev/null)" = /dev/mapper/skittles-root
 check 'boot filesystem mounted' mountpoint -q /boot
-check 'boot filesystem is FAT' bash -c '[[ $(findmnt -n -o FSTYPE /boot) == vfat ]]'
+check 'boot filesystem is FAT' test "$(findmnt -n -o FSTYPE /boot 2>/dev/null)" = vfat
 check_mount_option 'boot mount has nosuid' /boot nosuid
 check_mount_option 'boot mount has nodev' /boot nodev
 check_mount_option 'boot mount has noexec' /boot noexec
@@ -1007,7 +1011,7 @@ check_line 'IPv6 redirects disabled (default)' /proc/sys/net/ipv6/conf/default/a
 check_line 'IPv4 redirect sending disabled (all)' /proc/sys/net/ipv4/conf/all/send_redirects '0'
 check_line 'IPv4 redirect sending disabled (default)' /proc/sys/net/ipv4/conf/default/send_redirects '0'
 if (( EUID != 0 )); then
-    check 'private user home permissions' bash -c '[[ $(stat -c %a "$HOME") == 700 ]]'
+    check 'private user home permissions' test "$(stat -c %a "$HOME" 2>/dev/null)" = 700
     if [[ -r $HOME/.config/baloofilerc ]]; then
         check_line 'Baloo indexing disabled' "$HOME/.config/baloofilerc" 'Indexing-Enabled=false'
     else
@@ -1110,7 +1114,8 @@ if [[ -n $root_slave ]]; then
     parent_disk=$(lsblk -ndo PKNAME "/dev/$root_slave" 2>/dev/null | head -n1)
     [[ -n $parent_disk ]] || parent_disk=$root_slave
     for attribute in rotational logical_block_size physical_block_size; do
-        if [[ -r /sys/class/block/$parent_disk/queue/$attribute ]]; then info "$parent_disk $attribute=$(</sys/class/block/$parent_disk/queue/$attribute)"; fi
+        queue_path=/sys/class/block/$parent_disk/queue/$attribute
+        if [[ -r $queue_path ]]; then info "$parent_disk $attribute=$(<"$queue_path")"; fi
     done
 fi
 if [[ -r /etc/skittles-release ]]; then
@@ -1138,7 +1143,7 @@ fi
 
 section 'NETWORK / PRIVACY'
 check 'NetworkManager configuration parses' NetworkManager --print-config
-check 'resolver points at systemd-resolved stub' bash -c '[[ $(readlink -f /etc/resolv.conf) == /run/systemd/resolve/stub-resolv.conf ]]'
+check 'resolver points at systemd-resolved stub' test "$(readlink -f /etc/resolv.conf 2>/dev/null)" = /run/systemd/resolve/stub-resolv.conf
 check 'systemd-resolved status available' resolvectl status
 check_line 'NetworkManager uses systemd-resolved' /etc/NetworkManager/conf.d/20-skittles-privacy.conf 'dns=systemd-resolved'
 check_line 'NetworkManager does not manage hostname' /etc/NetworkManager/conf.d/20-skittles-privacy.conf 'hostname-mode=none'
@@ -1179,6 +1184,8 @@ if (( EUID == 0 )); then
     check 'standard kernel boot image' test -s /boot/vmlinuz-linux
     check 'LTS recovery kernel boot image' test -s /boot/vmlinuz-linux-lts
     check 'GRUB contains linux-lts entry' grep -q 'linux-lts' /boot/grub/grub.cfg
+    # awk's $0 and end-of-line $ are intentionally literal here.
+    # shellcheck disable=SC2016
     check 'every GRUB Linux entry disables zswap' awk '/^[[:space:]]*linux(efi)?[[:space:]]/ { seen=1; if ($0 !~ /(^|[[:space:]])zswap.enabled=0([[:space:]]|$)/) bad=1 } END { exit !(seen && !bad) }' /boot/grub/grub.cfg
     check 'NVIDIA modules are late-loaded' grep -Fqx 'MODULES=()' /etc/mkinitcpio.conf
 else
@@ -1202,7 +1209,7 @@ if pacman -Q steam >/dev/null 2>&1; then
         gamemode_members=$(getent group gamemode | cut -d: -f4)
         if [[ -n $gamemode_members ]]; then pass 'installed user belongs to GameMode group'; else fail 'installed user belongs to GameMode group'; fi
     else
-        check 'current user belongs to GameMode group' bash -c 'id -nG "$USER" | tr " " "\n" | grep -Fxq gamemode'
+        check 'current user belongs to GameMode group' user_in_group "$USER" gamemode
     fi
     check 'NTSync module is available' modprobe -n ntsync
     if [[ -e /dev/ntsync ]]; then pass 'NTSync device active'; else info 'NTSync device not active (load/use may be session dependent)'; fi
