@@ -60,7 +60,7 @@ The minimal profile installs explicit base, Plasma, networking/audio, NVIDIA, fi
 
 The generated chroot script configures locale/time/hostname, account passwords, sudo, private home permissions, Baloo, SDDM, firewall, NetworkManager/resolved privacy defaults, journald, optional GameMode, zram, kernel hardening, coredumps, mkinitcpio, both NVIDIA kernel module sets, GRUB, enabled services, `/etc/skittles-release`, and `skittles-doctor`.
 
-Passwords are delivered to the chroot over stdin as NUL-separated values rather than command arguments, then variables are unset. The temporary chroot helper is removed before completion.
+Passwords are delivered to the chroot over stdin as NUL-separated values rather than command arguments, then variables are unset. The temporary chroot helper is removed before completion. The live ISO resolver remains available during chroot configuration; only after `arch-chroot` exits successfully and releases its resolver bind mount does the outer installer establish the target systemd-resolved symlink.
 
 ## Boot configuration
 

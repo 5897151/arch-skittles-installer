@@ -385,5 +385,105 @@ class GeneratedConfigurationTests(unittest.TestCase):
             self.assertIn(token, self.doctor)
 
 
+class AuditRegressionTests(unittest.TestCase):
+    def test_resolver_switch_happens_only_after_successful_chroot(self):
+        # Run the real install_system function on ordinary temporary files.
+        # Every privileged/storage command is replaced by a shell function.
+        function = re.search(r"^install_system\(\) \{\n.*?^\}", TEXT, re.M | re.S).group(0)
+        chroot = heredoc("CHROOT_SCRIPT")
+        self.assertNotIn("ln -sf ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf", chroot)
+        for result in (0, 23):
+            with self.subTest(chroot_exit=result), tempfile.TemporaryDirectory() as td:
+                root = Path(td)
+                (root / "etc").mkdir()
+                (root / "work").mkdir()
+                (root / "work/pacman.conf").write_text("# fixture\n")
+                resolver = root / "etc/resolv.conf"
+                resolver.write_text("nameserver 192.0.2.1\n")
+                body = function + f"""
+set -Eeuo pipefail
+MNT={shlex.quote(td)}
+WORKDIR="$MNT/work"
+EFI_MNT="$MNT/boot"
+CRYPT_NAME=fictional
+ROOT_PART=fictional
+PACKAGES=()
+USERNAME=fixture TIMEZONE=UTC LOCALE=C KEYMAP=us HOSTNAME=fixture
+ALLOW_DISCARDS=0 PROFILE=minimal VERSION=test
+USER_PASSWORD=synthetic-user ROOT_PASSWORD=synthetic-root
+require_approved_plan() {{ :; }}
+assert_target_binding() {{ :; }}
+log() {{ :; }}
+pacstrap() {{ :; }}
+genfstab() {{ :; }}
+write_chroot_script() {{ :; }}
+cryptsetup() {{ [[ $1 != luksUUID ]] || printf '%s' 11111111-1111-1111-1111-111111111111; }}
+blkid() {{ printf '%s' 22222222-2222-2222-2222-222222222222; }}
+arch-chroot() {{
+    [[ ! -L "$MNT/etc/resolv.conf" ]] || return 99
+    cat >/dev/null
+    return {result}
+}}
+sync() {{ :; }}
+umount() {{ :; }}
+install_system
+"""
+                proc = subprocess.run(["bash", "-c", body], text=True, capture_output=True)
+                self.assertEqual(proc.returncode, result, proc.stderr)
+                if result == 0:
+                    self.assertTrue(resolver.is_symlink())
+                    self.assertEqual(str(resolver.readlink()), "../run/systemd/resolve/stub-resolv.conf")
+                else:
+                    self.assertFalse(resolver.is_symlink())
+                    self.assertEqual(resolver.read_text(), "nameserver 192.0.2.1\n")
+
+    def test_partitioning_refuses_identity_change_after_wipe(self):
+        proc = run_bash("""
+set -Eeuo pipefail
+require_approved_plan() { :; }
+assert_target_binding() { :; }
+assert_install_workspace() { :; }
+assert_selected_drives() { :; }
+section() { :; }
+clear_disk() { WIPED=1; }
+assert_same_disk() { [[ ${WIPED:-0} == 0 ]] || die 'identity changed'; }
+sgdisk() { printf 'PARTITION_CALLED'; }
+partprobe() { :; }
+udevadm() { :; }
+EFI_PART=/dev/FICTIONAL1 ROOT_PART=/dev/FICTIONAL2
+DISK=/dev/FICTIONAL DISK_IDENTITY=fixture DISK_SIZE_BYTES=1
+wipe_and_partition
+""")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("identity changed", proc.stderr)
+        self.assertNotIn("PARTITION_CALLED", proc.stdout)
+
+    def test_doctor_failed_service_query_does_not_report_false_pass(self):
+        doctor = heredoc("DOCTOR_SCRIPT")
+        fragment = doctor.split("section 'FAILED SERVICES'\n", 1)[1]
+        for rc, output, expected in [(1, "", "could not query"), (0, "", "PASS"), (0, "broken.service", "FAIL")]:
+            with self.subTest(rc=rc, output=output):
+                body = f"""
+failures=0
+pass() {{ printf 'PASS %s\\n' "$*"; }}
+fail() {{ printf 'FAIL %s\\n' "$*"; failures=$((failures+1)); }}
+systemctl() {{ printf '%s' {shlex.quote(output)}; return {rc}; }}
+""" + fragment
+                proc = subprocess.run(["bash", "-c", body], text=True, capture_output=True)
+                self.assertIn(expected, proc.stdout)
+                self.assertEqual(proc.returncode, 0 if rc == 0 and not output else 1)
+                if rc:
+                    self.assertNotIn("PASS", proc.stdout)
+
+    def test_doctor_skips_wayland_check_in_console(self):
+        doctor = heredoc("DOCTOR_SCRIPT")
+        fragment = doctor.split('if [[ ${XDG_SESSION_TYPE:-} == wayland ]]', 1)[1].split("\n\nsection 'BOOT / SECURITY'", 1)[0]
+        fragment = 'if [[ ${XDG_SESSION_TYPE:-} == wayland ]]' + fragment
+        for session, expected in [("tty", "INFO"), ("", "INFO"), ("wayland", "PASS"), ("x11", "FAIL")]:
+            with self.subTest(session=session):
+                proc = subprocess.run(["bash", "-c", 'pass() { echo PASS; }; fail() { echo FAIL; }; info() { echo INFO; }; XDG_SESSION_TYPE=' + shlex.quote(session) + '\n' + fragment], text=True, capture_output=True)
+                self.assertEqual(proc.stdout.strip(), expected)
+
+
 if __name__ == "__main__":
     unittest.main()

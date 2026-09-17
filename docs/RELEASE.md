@@ -119,7 +119,7 @@ Before publishing a tag:
 
 ## Real GitHub validation record
 
-See [RELEASE-DECISION.md](RELEASE-DECISION.md) for the exact source commit, hosted run and local validation evidence. Public run `35170020735` is green but incomplete: only seven tests executed. The restored union passes 46 tests locally; its push and full hosted validation are blocked pending explicit approval in chat. No release provenance is claimed from the existence of an attestation step.
+See [RELEASE-DECISION.md](RELEASE-DECISION.md) for exact evidence. Hosted run `35172143080` on `580532268d2e0e39f4671dd0b035b75ed3170e6f` passed the complete 46-test baseline, Bash, ShellCheck 0.9.0, tree completeness and whitespace. Follow-up fixes pass 50 tests locally but have no hosted result yet. No release provenance is claimed from the existence of an attestation step.
 
 ## Current status
 
