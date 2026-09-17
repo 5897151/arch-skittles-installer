@@ -4,7 +4,7 @@ set -Eeuo pipefail
 
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
-# shellcheck source=../skittles-installer.sh
+# shellcheck source=skittles-installer.sh
 source ./skittles-installer.sh
 
 [[ $EUID -eq 0 ]] || { echo 'Arch pacman integration must run as root in a disposable container.' >&2; exit 1; }
