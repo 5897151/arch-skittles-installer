@@ -4,6 +4,13 @@ SKITTLES follows Semantic Versioning. This changelog is structured after Keep a 
 
 ## [Unreleased]
 
+### Fixed (local regression coverage; hardware validation pending)
+
+- Establish the installed resolver symlink after `arch-chroot` releases its temporary resolver bind mount, preserving live DNS throughout configuration.
+- Recheck target identity and idle state between completion of the wipe and partition creation.
+- Report failed-service query errors as failures instead of an empty successful result; skip the graphical-session check from a text console.
+
+
 ### Known Issues
 
 - Stable release is blocked until an owner-authorized software license is selected.

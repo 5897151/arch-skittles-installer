@@ -608,6 +608,7 @@ wipe_and_partition() {
     section '06 / INSTALLING ARCH'
     clear_disk "$DISK" "$DISK_IDENTITY" "$DISK_SIZE_BYTES"
     # No ignored disk I/O errors. The disk has already been cleared above.
+    assert_same_disk
     sgdisk --clear --new=1:0:+2GiB --typecode=1:ef00 --change-name=1:EFI \
         --new=2:0:0 --typecode=2:8309 --change-name=2:Linux-LUKS "$DISK"
     sgdisk --verify "$DISK"
@@ -772,7 +773,8 @@ LLMNR=no
 MulticastDNS=no
 DNSOverTLS=no
 RESOLVER_PRIVACY
-ln -sf ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+# install_system establishes the resolver symlink after arch-chroot releases
+# its temporary /etc/resolv.conf bind mount. Keep live-ISO DNS available here.
 # Parse NetworkManager's merged configuration now rather than discovering a typo after reboot.
 NetworkManager --print-config >/dev/null
 cat > /etc/systemd/journald.conf.d/20-skittles-retention.conf <<'JOURNAL'
@@ -911,7 +913,7 @@ if [[ -r /etc/skittles-release ]]; then cat /etc/skittles-release; else fail '/e
 printf 'Running kernel: %s\n' "$(uname -r)"
 printf 'Session: %s\n' "${XDG_SESSION_TYPE:-not a graphical session}"
 if [[ ${XDG_SESSION_TYPE:-} == wayland ]]; then pass 'Plasma session is Wayland'
-elif [[ -n ${XDG_SESSION_TYPE:-} ]]; then fail "graphical session is Wayland (found ${XDG_SESSION_TYPE})"
+elif [[ ${XDG_SESSION_TYPE:-} == x11 ]]; then fail "graphical session is Wayland (found ${XDG_SESSION_TYPE})"
 else info 'Wayland check skipped outside a graphical session'; fi
 
 section 'BOOT / SECURITY'
@@ -1083,8 +1085,11 @@ else
 fi
 
 section 'FAILED SERVICES'
-failed_units=$(systemctl --failed --no-legend --plain 2>/dev/null || true)
-if [[ -z $failed_units ]]; then pass 'no failed system services'; else fail 'no failed system services'; printf '%s\n' "$failed_units"; fi
+if failed_units=$(systemctl --failed --no-legend --plain 2>/dev/null); then
+    if [[ -z $failed_units ]]; then pass 'no failed system services'; else fail 'no failed system services'; printf '%s\n' "$failed_units"; fi
+else
+    fail 'could not query failed system services'
+fi
 printf '\n%s check(s) failed. No settings changed.\n' "$failures"
 (( failures == 0 ))
 
@@ -1147,6 +1152,9 @@ install_system() {
         arch-chroot "$MNT" /root/skittles-configure.sh "$luks_uuid" "$root_uuid" \
             "$USERNAME" "$TIMEZONE" "$LOCALE" "$KEYMAP" "$HOSTNAME" "$ALLOW_DISCARDS" "$PROFILE" "$VERSION"
     unset USER_PASSWORD ROOT_PASSWORD
+    # arch-chroot temporarily bind-mounts the live resolver. Replace the target
+    # only after that mount is released, without changing the live ISO resolver.
+    ln -sfn ../run/systemd/resolve/stub-resolv.conf "$MNT/etc/resolv.conf"
     sync
     umount "$EFI_MNT"
     OWN_EFI=0

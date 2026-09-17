@@ -2,7 +2,7 @@
 
 ## NOT READY FOR v1.0.0
 
-Source version: `1.0.0-rc.1`. The missing documentation and test modules have been restored locally. The full hosted baseline is still blocked; local success is not a hosted or hardware release gate.
+Source version: `1.0.0-rc.1`. The missing documentation and test modules have been restored locally. The full hosted baseline now passes; follow-up correctness fixes have only local validation. Neither is a hardware release gate.
 
 ## Repository repair evidence
 
@@ -11,7 +11,7 @@ Source version: `1.0.0-rc.1`. The missing documentation and test modules have be
 - Exactly nine files restored from `43e9e4ef10b45cc0367fea57a76789c21c1b9850`; no existing files deleted or replaced.
 - All four Python test modules discovered: docs, GitHub, installer, release metadata.
 - Installer bytes unchanged from public `main` (Git blob `66687ea9d3a41ea68beb8aa1887c9df859181139`).
-- Follow-up documentation and CI completeness checks do not change installer behavior. Use `git rev-parse HEAD` for their containing commit; this document does not claim a hosted result for that commit.
+- The original repair and CI completeness commits did not change installer behavior. Subsequent correctness changes are listed below; use `git rev-parse HEAD` for their containing commit. No hosted result is claimed for them yet.
 
 ## Local automated evidence
 
@@ -32,19 +32,23 @@ The secret scan covered private-key headers, common GitHub/AWS token forms, bear
 
 ## Hosted GitHub CI evidence
 
-[Run 35170020735](https://github.com/5897151/arch-skittles-installer/actions/runs/35170020735) tested **only** `d2331a1c586907a6a6a16ada1179eb9d54484314`:
+The owner imported and pushed the prepared commits. [Run 35172143080](https://github.com/5897151/arch-skittles-installer/actions/runs/35172143080) tested `580532268d2e0e39f4671dd0b035b75ed3170e6f`:
 
+- Complete documentation/test tree check: PASS.
 - Bash syntax: PASS.
 - ShellCheck **0.9.0**: PASS.
-- Python: **7 tests PASS**, all from `test_github.py`; insufficient for the required release gate.
+- Python: **46 tests PASS**, all four modules discovered.
 - Whitespace: PASS.
-- Observed token permissions: contents read, metadata read.
 
-The restored 46-test tree has **not** run on GitHub. Automatic approval review rejected the push to public `main`, because it did not accept the attached mandate as direct authorization for that remote mutation. Explicit owner approval in chat is needed to publish the prepared commits. No alternative remote mutation was attempted.
+This is the first verified complete hosted baseline. It does not cover subsequent fixes.
 
-## Review still open
+## Follow-up fixes awaiting publication
 
-See [RELEASE-AUDIT.md](RELEASE-AUDIT.md). In particular, current `arch-chroot` resolver bind-mount behavior conflicts with the generated script replacing `/etc/resolv.conf`. This is a source-review finding, not a reproduced hardware failure. Installer changes remain frozen until the complete hosted baseline passes, then this requires a regression test and repair before hardware validation.
+The follow-up source passes **50 local tests**. The four added regressions cover resolver replacement ordering and chroot failure, identity change between wipe and partitioning, failed-service query errors, and console-session handling. Bash syntax and whitespace checks pass locally. ShellCheck is unavailable locally; the baseline result cannot be carried over to changed installer code.
+
+Installer behavior changed only in those areas. No release version/tag/license was changed. The accidentally tracked transfer bundle is removed from the follow-up source tree.
+
+GitHub publication remains blocked by credentials: shell Git has no authenticated push credentials and the GitHub integration rejected tree creation with HTTP 403. Owner authorization is already explicit; no further authorization is required, but working write access is needed. The broader audit and exact-SHA hosted verification remain incomplete. See [RELEASE-AUDIT.md](RELEASE-AUDIT.md).
 
 ## Publication blocker
 

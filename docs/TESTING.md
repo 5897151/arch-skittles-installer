@@ -19,11 +19,9 @@ Destructive tools are mocked. The zero-wipe byte-count regression uses real `dd`
 
 ### Current automated status
 
-The restored union passes 46 local tests across all four modules. Bash syntax, five GitHub YAML files and whitespace checks pass locally. Local ShellCheck is unavailable.
+Hosted run [35172143080](https://github.com/5897151/arch-skittles-installer/actions/runs/35172143080) tested `580532268d2e0e39f4671dd0b035b75ed3170e6f`: complete tree, Bash, ShellCheck 0.9.0, **46 tests**, and whitespace all PASS.
 
-Hosted run `35170020735` passed Bash and ShellCheck 0.9.0 on public commit `d2331a1c586907a6a6a16ada1179eb9d54484314`, but ran only seven tests. It is not the full release gate. The union repair has not been pushed or tested on GitHub because automatic approval review blocked that remote action.
-
-See [RELEASE-DECISION.md](RELEASE-DECISION.md) for exact commit/run evidence and [RELEASE-AUDIT.md](RELEASE-AUDIT.md) for open defects. Do not begin release sign-off from an untagged local checkout.
+Follow-up resolver, partition revalidation and doctor corrections pass **50 local tests**; their hosted result and ShellCheck remain pending publication. See [RELEASE-DECISION.md](RELEASE-DECISION.md) for evidence and [RELEASE-AUDIT.md](RELEASE-AUDIT.md) for open audit work. Do not begin release sign-off from an untagged local checkout.
 
 ## Read-only hardware evidence sequence
 

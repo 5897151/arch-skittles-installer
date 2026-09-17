@@ -11,7 +11,8 @@ Status: **NOT READY FOR v1.0.0**. Updated 2026-09-17 from the actual repository 
 | Bash / YAML / whitespace | PASS | See [RELEASE-DECISION.md](RELEASE-DECISION.md) |
 | Local relative file links | PASS | All Markdown scanned; anchor checking not performed |
 | Available history secret patterns | PASS | 42 unique blobs scanned, no pattern findings; not a comprehensive secret guarantee |
-| Hosted full suite | BLOCKED | Push approval required; current hosted green ran only seven tests |
+| Hosted baseline | PASS | Run `35172143080`, commit `580532268d2e0e39f4671dd0b035b75ed3170e6f`, 46 tests |
+| Follow-up fixes | BLOCKED | 50 tests pass locally; publication and hosted validation require working GitHub write access |
 | Local ShellCheck | BLOCKED | Not installed; hosted 0.9.0 passed unchanged installer on public baseline |
 | Final release assets / provenance | BLOCKED | License and tagged publication gates not satisfied |
 | Hardware / recovery / performance | NOT TESTED | No target-machine execution or measurements |
@@ -19,13 +20,13 @@ Status: **NOT READY FOR v1.0.0**. Updated 2026-09-17 from the actual repository 
 
 ## Source-review findings requiring follow-up
 
-1. **Chroot resolver replacement:** current upstream `arch-chroot` bind-mounts the live resolver onto the target `/etc/resolv.conf` unless `-r` is requested. SKITTLES invokes `arch-chroot` without `-r`, then its generated helper runs `ln -sf` on that path. Replacing a mounted file can fail with `EBUSY`, interrupting installation after destructive work. The correction must preserve DNS during configuration and establish the installed resolved symlink after the temporary mount is released. Add an ordinary-file/mock regression; do not test against real block devices. [Upstream implementation](https://gitlab.archlinux.org/archlinux/arch-install-scripts/-/blob/master/arch-chroot.in).
+1. **Chroot resolver replacement (fixed locally, hosted/hardware validation pending):** current upstream `arch-chroot` bind-mounts the live resolver onto the target `/etc/resolv.conf` unless `-r` is requested. SKITTLES invokes `arch-chroot` without `-r`, then its generated helper runs `ln -sf` on that path. Replacing a mounted file can fail with `EBUSY`, interrupting installation after destructive work. The correction now preserves DNS during configuration and establishes the installed resolved symlink after the temporary mount is released. The new ordinary-file/mock regression covers success and chroot failure. No block devices were used. [Upstream implementation](https://gitlab.archlinux.org/archlinux/arch-install-scripts/-/blob/master/arch-chroot.in).
 2. **Recovery resolver instructions:** review the manual `/mnt/run` stub-copy workaround against chroot API filesystem setup; verify resolver handling inside the actual current Arch ISO. The recovery guide has not been executed.
-3. **Doctor accuracy:** failed-service lookup currently suppresses command errors and can report PASS for empty output on failure. Console sessions can be reported as failed Wayland sessions. Review status semantics and add safe tests before treating diagnostics as a sign-off gate.
+3. **Doctor accuracy (fixed locally):** failed-service query errors now produce FAIL rather than an empty successful result; console sessions skip the graphical-session check. Both changes have safe regression coverage. Broader doctor completeness review remains open.
 4. **Stable publication gate:** the workflow checks particular `NOT TESTED` and draft markers, but does not positively validate every required sign-off row as PASS. A FAIL row or removed table must not permit stable publication. Strengthen with negative fixtures before any stable tag.
 5. **Final safety review:** identity checks, plan authorization, ownership cleanup and extra-wipe ordering are present. Additional adversarial/failure coverage and a per-write identity review remain open; their presence is not proof against races with other privileged processes.
 
-The mandate freezes installer changes until the complete hosted baseline is green. No installer behavior was changed during this blocked repair. These findings must be resolved or explicitly dispositioned before claiming automated completion.
+The complete hosted baseline is now green. Follow-up installer changes address the resolver conflict, partition-time identity recheck and two doctor status defects. Four new regressions pass locally. Exact-SHA hosted validation and the remaining findings must be resolved before claiming automated completion.
 
 ## Upstream checks performed
 
@@ -44,7 +45,7 @@ All physical results remain **NOT TESTED**: clean install, repeated LUKS unlock,
 
 ## Owner / access blockers
 
-- Explicit approval in chat to push the prepared repair to public `main` and continue hosted validation.
+- Working GitHub write credentials: authorization is explicit, but the integration returned HTTP 403 and shell Git has no push credentials.
 - Owner license selection; no license has been selected or added.
 - Physical i7-8700K + RTX 3060 Ti validation from the actual downloaded RC.
 
