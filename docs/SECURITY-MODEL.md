@@ -26,7 +26,7 @@ Root encryption protects data at rest, but the ESP, GRUB, kernel, and initramfs 
 
 ### DNS observers and malicious networks
 
-LLMNR/mDNS are disabled and DNS has a coherent local resolver, but DNS-over-TLS is disabled. The configured DNS resolver, local network, VPN/provider path, and upstream observers can still learn DNS and traffic metadata. nftables blocks unsolicited inbound traffic but cannot make a hostile network trustworthy.
+LLMNR/mDNS are disabled and DNS has a coherent local resolver, but DNS-over-TLS is disabled. Resolver addresses come from the active network; the fallback list is empty so SKITTLES does not silently substitute public DNS. The configured DNS resolver, local network, VPN/provider path, and upstream observers can still learn DNS and traffic metadata. nftables blocks unsolicited inbound traffic and reloads only its own table, but cannot make a hostile network trustworthy.
 
 ### Storage sanitization
 

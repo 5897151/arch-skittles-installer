@@ -33,20 +33,20 @@ Other hardware is unsupported even if the script can be adapted.
 - LUKS2 with Argon2id protects ext4 root at rest.
 - `/home` resides inside encrypted root and the created home is private.
 - Password-authenticated sudo; no SSH server.
-- nftables defaults to inbound/forward drop and outbound accept.
+- nftables defaults to inbound/forward drop and outbound accept; reload replaces only SKITTLES' table and preserves unrelated rulesets.
 - Core-dump processing/storage is disabled and low-risk kernel/filesystem hardening is applied.
-- NetworkManager uses `systemd-resolved`; DHCP hostname sending, LLMNR, mDNS and connectivity checking are disabled by default.
+- NetworkManager uses `systemd-resolved`; DHCP hostname sending, LLMNR, mDNS, connectivity checking, and compiled-in fallback DNS are disabled by default.
 - Wi-Fi scanning uses randomized MAC addresses and saved Wi-Fi connections default to a stable-per-SSID association MAC.
 - DNS-over-TLS is **not** enabled; SKITTLES is not a VPN, Tor, or anonymity system.
 - Secure Boot is not configured, so the unencrypted ESP/boot chain remains a physical-tampering gap.
 
 ## Gaming
 
-The gaming profile adds Steam, 32-bit NVIDIA/Vulkan libraries, GameMode, MangoHud and NTSync. Normal desktop operation keeps adaptive CPU policy; GameMode may request the performance governor only for games launched through it. No overclock, fixed GPU clocks, special gaming kernel, mitigation disabling, or forced global overlay is installed.
+The gaming profile adds Steam, 32-bit NVIDIA/Vulkan libraries, GameMode, MangoHud and NTSync. Normal desktop operation keeps adaptive CPU policy; GameMode may request the performance governor, best-effort I/O priority, and a session-scoped split-lock change only for participating games. No overclock, fixed GPU clocks, special gaming kernel, global mitigation disabling, or forced global overlay is installed.
 
 ## Recovery
 
-Both Arch `linux` and `linux-lts` are installed with matching NVIDIA open kernel modules. GRUB includes the normal UEFI entry and removable fallback path. `docs/RECOVERY.md` documents current-Arch-ISO recovery, LUKS unlock, chroot, package/NVIDIA reinstall, initramfs rebuild, GRUB repair, LTS recovery boot and safe cleanup.
+Both Arch `linux` and `linux-lts` are installed with matching NVIDIA open kernel modules. GRUB includes the normal UEFI entry and removable fallback path, and its shared command line disables zswap so the configured zram swap is used directly. `docs/RECOVERY.md` documents current-Arch-ISO recovery, LUKS unlock, chroot, package/NVIDIA reinstall, initramfs rebuild, GRUB repair, LTS recovery boot and safe cleanup.
 
 ## Automated validation
 

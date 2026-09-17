@@ -105,6 +105,23 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertIn("findmnt -T /mnt/boot", recovery)
         self.assertNotIn("sudo cryptsetup luksHeaderBackup", recovery)
 
+    def test_privacy_document_matches_resolver_policy(self):
+        privacy = (ROOT / "docs/PRIVACY.md").read_text(encoding="utf-8")
+        self.assertIn("network-provided", privacy)
+        self.assertIn("`FallbackDNS=`", privacy)
+        self.assertIn("does not provide encrypted DNS", privacy)
+
+    def test_performance_matrix_remains_evidence_gated(self):
+        performance = (ROOT / "docs/PERFORMANCE.md").read_text(encoding="utf-8")
+        for case in [
+            "Baseline", "zswap + zram", "GameMode", "Plasma VRR", "dm-crypt workqueues",
+            "NVIDIA PAT", "ReBAR", "zram VM candidates", "Gamescope", "Clocksource sanity",
+        ]:
+            with self.subTest(case=case):
+                self.assertIn(case, performance)
+        self.assertGreaterEqual(performance.count("**NOT TESTED**"), 10)
+        self.assertNotRegex(performance, r"(?i)(measured|improved|gain(?:ed)?)[^\n]*(?:[1-9][0-9]*(?:\.[0-9]+)?%)")
+
 
 if __name__ == "__main__":
     unittest.main()

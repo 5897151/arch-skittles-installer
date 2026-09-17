@@ -32,9 +32,9 @@ Other hardware is unsupported, even if the script can technically be adapted.
 
 - LUKS2 with Argon2id encrypted ext4 root.
 - Private created user home and password-authenticated sudo.
-- Default-drop inbound/forward nftables policy and no SSH server.
-- Restricted kernel diagnostics, disabled coredump processing/storage, and conservative protected-link/ASLR settings.
-- NetworkManager + `systemd-resolved` with DHCP hostname suppression, stable pseudonymous DHCP IDs, Wi-Fi scan randomization, stable-per-SSID association MAC, IPv6 privacy, LLMNR/mDNS off and connectivity checks off.
+- Default-drop inbound/forward nftables policy, table-scoped reload ownership, and no SSH server.
+- Restricted kernel diagnostics, disabled coredump processing/storage, and conservative protected-link/ASLR/BPF/kexec/redirect settings.
+- NetworkManager + `systemd-resolved` with DHCP hostname suppression, stable pseudonymous DHCP IDs, Wi-Fi scan randomization, stable-per-SSID association MAC, IPv6 privacy, LLMNR/mDNS off, connectivity checks off, and no public fallback resolver configured.
 - Bounded journal retention and Baloo indexing disabled for the created user.
 - LUKS discard is off by default and explicitly opt-in.
 
@@ -42,7 +42,7 @@ These choices improve privacy but do not provide anonymity. DNS-over-TLS, Tor an
 
 ## Gaming
 
-The gaming profile adds Steam, 32-bit NVIDIA/Vulkan libraries, GameMode, MangoHud and NTSync. GameMode is an on-demand game-session optimization layer; SKITTLES does not force a permanent maximum-performance governor, CPU/GPU overclock, fixed GPU clocks, alternate gaming kernel, or disabled CPU mitigations.
+The gaming profile adds Steam, 32-bit NVIDIA/Vulkan libraries, GameMode, MangoHud and NTSync. GameMode is an on-demand game-session optimization layer with explicit I/O priority and session-scoped split-lock behavior; SKITTLES does not force a permanent maximum-performance governor, CPU/GPU overclock, fixed GPU clocks, alternate gaming kernel, or global mitigation disable.
 
 ## Recovery
 

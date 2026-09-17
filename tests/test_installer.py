@@ -381,6 +381,12 @@ class GeneratedConfigurationTests(unittest.TestCase):
         self.assertEqual(resolve["LLMNR"], "no")
         self.assertEqual(resolve["MulticastDNS"], "no")
         self.assertEqual(resolve["DNSOverTLS"], "no")
+        self.assertEqual(resolve["FallbackDNS"], "")
+
+    def test_boot_command_line_disables_zswap_for_grub_managed_kernels(self):
+        self.assertIn('cmdline="rd.luks.name=${LUKS_UUID}=skittles-root root=UUID=${ROOT_UUID} rw zswap.enabled=0"', self.chroot)
+        self.assertIn('GRUB_CMDLINE_LINUX_DEFAULT="$cmdline"', self.chroot)
+        self.assertIn("grub-mkconfig -o /boot/grub/grub.cfg", self.chroot)
 
     def test_zram_policy_is_bounded_and_not_over_tuned(self):
         cfg = heredoc("ZRAM")
@@ -398,6 +404,21 @@ class GeneratedConfigurationTests(unittest.TestCase):
         self.assertIsNotNone(re.search(r"chain output\s*\{.*?policy accept;", cfg, re.S))
         self.assertNotIn("tcp dport 22 accept", cfg)
 
+    def test_firewall_reload_owns_only_skittles_table(self):
+        cfg = heredoc("NFT")
+        self.assertIn("destroy table inet skittles", cfg)
+        self.assertNotRegex(cfg, r"(?m)^\s*flush\s+ruleset(?:\s|$)")
+
+        # Minimal mocked ruleset model: SKITTLES replacement must leave a table
+        # owned by unrelated VPN/container software untouched.
+        tables = {("inet", "vpn"), ("inet", "skittles")}
+        for family, name in re.findall(r"^destroy table (\S+) (\S+)$", cfg, re.M):
+            tables.discard((family, name))
+        for family, name in re.findall(r"^table (\S+) (\S+) \{", cfg, re.M):
+            tables.add((family, name))
+        self.assertIn(("inet", "vpn"), tables)
+        self.assertIn(("inet", "skittles"), tables)
+
     def test_low_risk_security_hardening(self):
         cfg = heredoc("SYSCTL")
         expected = {
@@ -405,12 +426,33 @@ class GeneratedConfigurationTests(unittest.TestCase):
             "kernel.kptr_restrict = 2",
             "kernel.yama.ptrace_scope = 1",
             "kernel.randomize_va_space = 2",
+            "kernel.unprivileged_bpf_disabled = 1",
+            "kernel.kexec_load_disabled = 1",
             "fs.suid_dumpable = 0",
             "fs.protected_hardlinks = 1",
             "fs.protected_symlinks = 1",
+            "vm.mmap_rnd_bits = 32",
+            "vm.mmap_rnd_compat_bits = 16",
+            "net.ipv4.conf.all.accept_redirects = 0",
+            "net.ipv4.conf.default.accept_redirects = 0",
+            "net.ipv6.conf.all.accept_redirects = 0",
+            "net.ipv6.conf.default.accept_redirects = 0",
+            "net.ipv4.conf.all.send_redirects = 0",
+            "net.ipv4.conf.default.send_redirects = 0",
         }
         self.assertTrue(expected <= set(cfg.splitlines()))
-        self.assertNotIn("mitigations=off", TEXT)
+        for prohibited in ["mitigations=off", "no_read_workqueue", "no_write_workqueue", "NVreg_UsePageAttributeTable=1"]:
+            self.assertNotIn(prohibited, TEXT)
+
+    def test_doctor_verifies_every_managed_security_sysctl(self):
+        cfg = heredoc("SYSCTL")
+        for line in cfg.splitlines():
+            if not line.strip():
+                continue
+            key, value = [part.strip() for part in line.split("=", 1)]
+            proc_path = "/proc/sys/" + key.replace(".", "/")
+            self.assertIn(proc_path, self.doctor)
+            self.assertRegex(self.doctor, re.escape(proc_path) + r" ['\"]" + re.escape(value) + r"['\"]")
 
     def test_boot_storage_and_crypto_decisions(self):
         self.assertIn("--new=1:0:+2GiB", TEXT)
@@ -440,6 +482,8 @@ class GeneratedConfigurationTests(unittest.TestCase):
         self.assertNotIn("skittles-performance.service", TEXT)
         self.assertNotIn("cpupower --cpu all frequency-set --governor performance", TEXT)
         self.assertIn("desiredgov=performance", heredoc("GAMEMODE"))
+        self.assertIn("ioprio=0", heredoc("GAMEMODE"))
+        self.assertIn("disable_splitlock=1", heredoc("GAMEMODE"))
         self.assertIn("Gaming profile requires the performance governor for GameMode.", TEXT)
         self.assertNotIn("CPU governor: performance.", TEXT)
 
@@ -451,13 +495,15 @@ class GeneratedConfigurationTests(unittest.TestCase):
     def test_doctor_has_required_release_diagnostic_areas(self):
         for heading in [
             "BOOT / SECURITY", "NVIDIA", "CPU", "STORAGE / ZRAM / TRIM",
-            "NETWORK / PRIVACY", "FIREWALL", "FAILED SERVICES",
+            "NETWORK / PRIVACY", "FIREWALL", "DISPLAY / GAMING", "FAILED SERVICES",
         ]:
             self.assertIn(heading, self.doctor)
         for token in [
             "Secure Boot disabled", "NVIDIA GPU responds", "zram swap active",
             "resolver points at systemd-resolved stub", "NetworkManager configuration parses",
             "Skittles firewall table loaded", "systemctl --failed",
+            "current clocksource", "zswap disabled while zram is active",
+            "physical_block_size", "UsePageAttributeTable", "FallbackDNS=",
         ]:
             self.assertIn(token, self.doctor)
 
@@ -560,6 +606,22 @@ systemctl() {{ printf '%s' {shlex.quote(output)}; return {rc}; }}
             with self.subTest(session=session):
                 proc = subprocess.run(["bash", "-c", 'pass() { echo PASS; }; fail() { echo FAIL; }; info() { echo INFO; }; XDG_SESSION_TYPE=' + shlex.quote(session) + '\n' + fragment], text=True, capture_output=True)
                 self.assertEqual(proc.stdout.strip(), expected)
+
+    def test_doctor_rejects_enabled_zswap(self):
+        doctor = heredoc("DOCTOR_SCRIPT")
+        start = "if [[ -r /sys/module/zswap/parameters/enabled ]]; then"
+        fragment = start + doctor.split(start, 1)[1].split("\ncheck 'running kernel command line disables zswap'", 1)[0]
+        for state, expected in [("N", "PASS"), ("0", "PASS"), ("Y", "FAIL"), ("1", "FAIL")]:
+            with self.subTest(state=state), tempfile.TemporaryDirectory() as td:
+                state_file = Path(td) / "enabled"
+                state_file.write_text(state + "\n")
+                body = fragment.replace("/sys/module/zswap/parameters/enabled", str(state_file))
+                proc = subprocess.run(
+                    ["bash", "-c", 'pass() { echo PASS; }; fail() { echo FAIL; };\n' + body],
+                    text=True, capture_output=True,
+                )
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertTrue(proc.stdout.startswith(expected), proc.stdout)
 
 
 if __name__ == "__main__":

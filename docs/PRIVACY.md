@@ -14,6 +14,7 @@ SKITTLES makes targeted privacy choices that preserve an ordinary desktop/networ
 | mDNS | off in NetworkManager and resolved | Reduce multicast service/name discovery | Printers/casting/service discovery may need explicit enablement | Enable only where needed | Checks both layers |
 | Resolver mode | NetworkManager → `systemd-resolved` stub | Keep one coherent DNS owner and inspectable resolver state | Applications still use normal libc resolver path | Change NetworkManager DNS mode and `/etc/resolv.conf` deliberately | Checks config, symlink, `resolvectl status` |
 | DNS-over-TLS | off | Avoid pretending encrypted DNS works without an explicit trusted-resolver policy | DNS is visible to the configured resolver/network path | Configure trusted resolvers and `DNSOverTLS=` yourself | Checks `DNSOverTLS=no` |
+| Fallback DNS | empty / disabled | Use DNS learned from the active network without silently switching to systemd's compiled-in public resolvers | Name resolution fails when an active link supplies no working DNS | Configure `FallbackDNS=` explicitly if that tradeoff is desired | Checks the empty `FallbackDNS=` assignment |
 | NetworkManager connectivity check | off | Avoid periodic distribution connectivity-probe requests | Captive portals are not auto-detected | Re-enable NetworkManager connectivity checking | Checks `enabled=false` |
 | Journal | persistent, max 256 MiB, max 14 days | Keep enough diagnostic history without indefinite retention | Older logs are removed; disk usage bounded | Edit journald drop-in | Checks configured caps |
 | Baloo | content indexing off for created user | Avoid background content indexing and index metadata | KDE search/content discovery is reduced | Re-enable in KDE/Baloo config | Checks user config when run unprivileged |
@@ -29,7 +30,7 @@ Wired Ethernet MAC cloning is not globally forced. Networks can still observe th
 
 ## DNS
 
-SKITTLES uses `systemd-resolved` as the local resolver and points `/etc/resolv.conf` to its stub. DNS servers normally come from the network connection. `DNSOverTLS=no` is explicit so the project does not make a false encrypted-DNS claim.
+SKITTLES uses `systemd-resolved` as the local resolver and points `/etc/resolv.conf` to its stub. DNS is network-provided through the active connection. `FallbackDNS=` is deliberately empty, so SKITTLES does not silently substitute Google, Cloudflare, Quad9, or systemd's compiled-in public fallback list when a link provides no usable DNS. `DNSOverTLS=no` is explicit: SKITTLES does not provide encrypted DNS and makes no such privacy claim.
 
 A VPN, encrypted DNS provider, Tor, application-specific DNS, or other privacy network layer is outside SKITTLES' scope.
 

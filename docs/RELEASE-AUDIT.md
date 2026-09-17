@@ -60,27 +60,35 @@ Sources: <https://wiki.archlinux.org/title/NVIDIA>, <https://wiki.archlinux.org/
 
 The installed lifecycle is coherent: the Arch ISO resolver remains usable while `arch-chroot` performs configuration; the outer installer creates `/etc/resolv.conf -> ../run/systemd/resolve/stub-resolv.conf` only after `arch-chroot` exits and releases its temporary resolver mount. NetworkManager is configured for `dns=systemd-resolved`; both NetworkManager and `systemd-resolved` are enabled.
 
-Configured defaults remain deliberate: hostname sending disabled, stable pseudonymous DHCP identifiers, randomized Wi-Fi scanning, stable-per-SSID association MAC, IPv6 stable privacy/temporary addresses, LLMNR/mDNS disabled, and connectivity probing disabled. DNSOverTLS remains explicitly off, so these are privacy-conscious defaults rather than encrypted DNS or anonymity.
+Configured defaults remain deliberate: hostname sending disabled, stable pseudonymous DHCP identifiers, randomized Wi-Fi scanning, stable-per-SSID association MAC, IPv6 stable privacy/temporary addresses, LLMNR/mDNS disabled, and connectivity probing disabled. DNSOverTLS remains explicitly off, and an empty `FallbackDNS=` prevents silent use of systemd's compiled-in public fallback resolvers. DNS is network-provided, not encrypted by SKITTLES, and failure remains visible when a link supplies no usable resolver.
 
 Recovery documentation now relies on `arch-chroot`'s resolver/API-filesystem setup instead of copying a resolver stub into `/mnt/run`. Physical ISO recovery remains NOT TESTED.
 
-Sources: <https://networkmanager.dev/docs/api/latest/NetworkManager.conf.html>, <https://networkmanager.dev/docs/api/latest/nm-settings-nmcli.html>, and current `arch-install-scripts` `arch-chroot` behavior.
+Sources: <https://networkmanager.dev/docs/api/latest/NetworkManager.conf.html>, <https://networkmanager.dev/docs/api/latest/nm-settings-nmcli.html>, <https://www.freedesktop.org/software/systemd/man/latest/resolved.conf.html>, <https://wiki.archlinux.org/title/Systemd-resolved>, and current `arch-install-scripts` `arch-chroot` behavior.
 
 ## Firewall static audit
 
-Generated nftables policy remains input drop / forward drop / output accept. It permits loopback, established/related traffic, ICMP/IPv6-ICMP control traffic, DHCPv4 client traffic, and link-local DHCPv6 client traffic. It has no blanket trusted-LAN rule and no SSH allowance. The target chroot runs `nft -c -f /etc/nftables.conf`; NetworkManager has explicit `Requires=`/`After=` ordering on nftables and systemd-resolved. No change was justified.
+Generated nftables policy remains input drop / forward drop / output accept. It permits loopback, established/related traffic, ICMP/IPv6-ICMP control traffic, DHCPv4 client traffic, and link-local DHCPv6 client traffic. It has no blanket trusted-LAN rule and no SSH allowance. Reload now uses the upstream idempotent `destroy table inet skittles` operation before recreating that table; no global `flush ruleset` remains, so unrelated tables are preserved. The target chroot still runs `nft -c -f /etc/nftables.conf`; NetworkManager has explicit `Requires=`/`After=` ordering on nftables and systemd-resolved.
+
+Source: <https://www.netfilter.org/projects/nftables/manpage.html>.
+
+## Low-risk sysctl audit
+
+The existing dmesg, kernel-pointer, ptrace, ASLR, setuid-coredump, and protected-link settings remain. The hardware-scoped x86-64 profile now explicitly pins 32/16 bits of mmap randomization, disables unprivileged BPF and later kexec image loading, and rejects/suppresses ICMP redirects appropriate to a non-router desktop. `ptrace_scope` remains 1 for debugger/game compatibility. No speculative-execution mitigation, SMT, global split-lock mitigation, or network-throughput tuning is disabled.
+
+Sources: <https://docs.kernel.org/admin-guide/sysctl/kernel.html>, <https://docs.kernel.org/admin-guide/sysctl/vm.html>, and <https://docs.kernel.org/networking/ip-sysctl.html>.
 
 ## CPU / GameMode static audit
 
-The i7-8700K desktop uses normal kernel/firmware adaptive policy by default. Current GameMode upstream configuration still documents `desiredgov`, `softrealtime`, `renice`, and `inhibit_screensaver`; if `defaultgov` is omitted, the original policy is restored on exit. SKITTLES uses only those conservative options and no GPU clock, power-limit, realtime-abuse, mitigation-disable, or permanent max-frequency settings. Performance benefit remains unclaimed until measurement.
+The i7-8700K desktop uses normal kernel/firmware adaptive policy by default. Current GameMode upstream configuration documents `desiredgov`, `softrealtime`, `renice`, `inhibit_screensaver`, `ioprio`, and session-scoped `disable_splitlock`; if `defaultgov` is omitted, the original policy is restored on exit. SKITTLES pins those behaviors explicitly and makes no global split-lock, GPU clock, power-limit, realtime-abuse, mitigation-disable, or permanent max-frequency change. Performance benefit remains unclaimed until measurement.
 
 Source: <https://github.com/FeralInteractive/gamemode/blob/master/example/gamemode.ini>.
 
 ## Storage / boot static audit
 
-The current source remains internally coherent: GPT with 2 GiB FAT32 ESP; LUKS2/Argon2id root; ext4 including `/home`; systemd-based mkinitcpio hooks with `sd-encrypt`; UUID-bound kernel command line; both `linux` and `linux-lts`; GRUB normal UEFI and removable fallback paths; LUKS discard and weekly fstrim only when explicitly opted in. Current Arch dm-crypt/mkinitcpio guidance still supports this architecture. No alternative boot architecture was introduced.
+The current source remains internally coherent: GPT with 2 GiB FAT32 ESP; LUKS2/Argon2id root; ext4 including `/home`; systemd-based mkinitcpio hooks with `sd-encrypt`; UUID-bound kernel command line; both `linux` and `linux-lts`; GRUB normal UEFI and removable fallback paths; LUKS discard and weekly fstrim only when explicitly opted in. Because current official Arch kernels enable zswap by default and SKITTLES intentionally provisions zram swap, the shared GRUB command line now includes `zswap.enabled=0`. Current Arch dm-crypt/mkinitcpio guidance still supports this architecture. No alternative boot architecture was introduced.
 
-Sources: <https://wiki.archlinux.org/title/Dm-crypt/System_configuration>, <https://wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system>, and <https://wiki.archlinux.org/title/Mkinitcpio>.
+Sources: <https://wiki.archlinux.org/title/Dm-crypt/System_configuration>, <https://wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system>, <https://wiki.archlinux.org/title/Mkinitcpio>, <https://wiki.archlinux.org/title/Zram>, and <https://wiki.archlinux.org/title/Zswap>.
 
 ## Release engineering audit
 

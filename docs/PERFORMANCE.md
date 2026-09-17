@@ -21,17 +21,26 @@ This approach does not disable thermal controls or firmware power limits and doe
 
 ## Measurement plan
 
-Before `v1.0.0`, measure on the supported i7-8700K + RTX 3060 Ti system from the exact RC artifact. Record at minimum:
+Before `v1.0.0`, measure on the supported i7-8700K + RTX 3060 Ti system from the exact RC artifact. Every row remains **NOT TESTED** until it is run on that physical machine.
 
-- idle package/system power and thermals after settling;
-- sustained CPU workload throughput, frequency, temperature, and throttling state;
-- sustained GPU workload stability and temperature;
-- at least two representative games with repeatable built-in or scripted benchmarks, comparing normal launch and `gamemoderun` where practical;
-- frame-time distribution (not only average FPS) when a stable capture method exists;
-- zram behavior under controlled memory pressure;
-- cold boot and resume observations to ensure performance policy did not trade away reliability.
+| Case | Controlled comparison | Required evidence / guardrail | Current result |
+| --- | --- | --- | --- |
+| 1. Baseline | Published pre-change behavior and normal desktop policy | Capture untouched baseline before interpreting later deltas | **NOT TESTED** |
+| 2. zswap + zram | zswap active versus `zswap.enabled=0`, with the same zram configuration | Memory-pressure workload; zram/zswap counters, latency and CPU cost | **NOT TESTED** |
+| 3. GameMode | identical launch with and without `gamemoderun` | Confirm policy restoration; run `gamemoded -t` before game measurements | **NOT TESTED** |
+| 4. Plasma VRR | Adaptive Sync off versus on, where the physical monitor supports it | Same display mode/FPS range; inspect stutter, tearing and frametime variance | **NOT TESTED** |
+| 5. dm-crypt workqueues | default versus `no_read_workqueue` + `no_write_workqueue` | Storage-focused A/B only; monitor CPU, throughput, latency and regressions | **NOT TESTED** |
+| 6. NVIDIA PAT | packaged default versus explicit PAT only if the current driver still exposes a meaningful choice | Confirm runtime state and driver applicability first; never infer benefit from load success | **NOT TESTED** |
+| 7. ReBAR | firmware ReBAR off versus on, only if motherboard/GPU/driver expose both states | Record firmware setting and detected state; do not manipulate it automatically | **NOT TESTED** |
+| 8. zram VM candidates | current defaults versus isolated candidates such as swappiness/page-cluster changes | One variable at a time under memory pressure; no blind ArchWiki bundle | **NOT TESTED** |
+| 9. Gamescope | native compositor path versus an explicit per-game Gamescope test | Optional and game-specific; never wrap all games by default | **NOT TESTED** |
+| 10. Clocksource sanity | packaged/default clocksource versus any available alternative only if diagnostics justify it | Latency/stability evidence required; do not force a clocksource by reputation | **NOT TESTED** |
 
-Keep test resolution/settings, driver version, kernel, game build, ambient conditions where relevant, and run count in the results. Do not promote a tweak based on a single favorable run.
+For every condition, capture average FPS, 1% low, 0.1% low, frametime percentiles and spikes where the tooling supports them; CPU/GPU utilization and clocks; memory plus swap/zram use; and storage latency for storage-related cases. Also capture thermals and throttling so a short boost is not mistaken for a sustainable gain.
+
+Hold constant the game/scene/benchmark, resolution, graphics settings, Proton version, kernel, NVIDIA driver, background-service state, and thermal starting condition. Use at least three runs per condition, report every run, and compare median/mean together with variance where appropriate.
+
+Every result set must identify the commit SHA, installer version, kernel, NVIDIA driver, relevant package versions, CPU/GPU/storage/display hardware, motherboard firmware/BIOS, test date, and exact experimental change. Do not promote a tweak whose effect is smaller than normal run-to-run variance or whose downside outweighs the measured gain.
 
 
 ## Repeatable release measurement procedure
@@ -43,7 +52,7 @@ For each representative workload:
 1. Reboot, log into Plasma Wayland, wait at least five minutes with no foreground workload, and record idle governor/EPP plus GPU idle state.
 2. Run the workload **three times without GameMode** using the same route/menu/save/benchmark sequence. Discard a run only for a documented external interruption.
 3. Reboot or return to the same settled state, then run the identical workload **three times with `gamemoderun`**.
-4. Record average FPS, 1% low FPS when the benchmark/capture tool provides it, visible frametime anomalies, GPU utilization/temperature, CPU utilization/temperature when available, and whether clocks/policy return to the pre-game state after exit.
+4. Record average FPS, 1% and 0.1% lows, frametime percentiles/spikes, GPU utilization/clock/temperature, CPU utilization/clock/temperature, memory and swap/zram use, and whether clocks/policy return to the pre-game state after exit.
 5. Report all runs, not only the best run. Do not call a difference meaningful if it is within normal run-to-run variance.
 
 Useful read-only state checks before, during, and after the workload include:
@@ -57,6 +66,7 @@ for p in /sys/devices/system/cpu/cpufreq/policy*; do
   [ -r "$p/energy_performance_preference" ] && cat "$p/energy_performance_preference"
 done
 nvidia-smi --query-gpu=driver_version,temperature.gpu,utilization.gpu,power.draw --format=csv
+gamemoded -t
 ```
 
 If the chosen title has no repeatable built-in benchmark or controlled scene, do not publish numeric claims from it. Use it only as a stability/compatibility test and keep `Current measurements` unclaimed.
@@ -71,6 +81,10 @@ If the chosen title has no repeatable built-in benchmark or controlled scene, do
 - universally forced I/O schedulers: optimal policy depends on device/controller/workload.
 - “gaming kernels” by reputation: both `linux` and `linux-lts` are chosen for straightforward support/recovery, not marketing claims.
 - global overlay injection or forced FPS caps: these are per-game user decisions.
+- SDDM replacement: Plasma Login Manager migration is a separate compatibility project, not a performance default.
+- dm-crypt workqueue bypass, forced NVIDIA PAT, firmware ReBAR changes, zram VM tuning, clocksource overrides, and universal Gamescope wrapping: each remains isolated A/B work from the experiment matrix above.
+- `linux-zen`: SKITTLES keeps `linux` + `linux-lts` for the supported and recovery paths.
+- SMT disabling, global split-lock mitigation disabling, GPU clock offsets, power-limit manipulation, and automatic fan tuning: these trade away compatibility, security, thermals, or reliability without release-hardware evidence.
 
 ## Current measurements
 

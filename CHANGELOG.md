@@ -9,6 +9,10 @@ SKITTLES follows Semantic Versioning. This changelog is structured after Keep a 
 - Establish the installed resolver symlink after `arch-chroot` releases its temporary resolver bind mount, preserving live DNS throughout configuration.
 - Recheck target identity and idle state between completion of the wipe and partition creation.
 - Report failed-service query errors as failures instead of an empty successful result; skip the graphical-session check from a text console.
+- Disable zswap through the shared GRUB command line so Arch's default zswap does not front the configured zram device.
+- Disable systemd-resolved's compiled-in public fallback resolvers while retaining network-provided DNS.
+- Replace only SKITTLES' nftables table during reload instead of flushing unrelated tables.
+- Pin the reviewed non-router/security sysctls and explicit session-scoped GameMode behavior.
 
 
 ### Release engineering
@@ -17,6 +21,7 @@ SKITTLES follows Semantic Versioning. This changelog is structured after Keep a 
 - Added executable negative release-gate fixtures, tag/license prerequisite tests, byte-reproducible release-asset testing, and a current-tree repository hygiene guard.
 - Expanded adversarial disk-plan/input regression coverage without changing installer behavior.
 - Updated recovery resolver guidance to rely on current `arch-chroot` resolver/API-filesystem handling instead of a manual `/mnt/run` copy workaround.
+- Expanded read-only CPU, clocksource, zram/zswap, storage, NVIDIA, Vulkan, GameMode, and NTSync diagnostics plus the physical A/B experiment matrix.
 
 ### Licensing
 

@@ -89,10 +89,10 @@ SKITTLES favors conservative, auditable defaults rather than aggressive hardenin
 - LUKS2/Argon2id encrypted root; `/home` lives inside it;
 - created user home mode `0700`;
 - password-authenticated `sudo`, no passwordless wheel rule;
-- nftables input/forward **drop**, output **accept**;
+- nftables input/forward **drop**, output **accept**, with reload ownership limited to `table inet skittles`;
 - no SSH server;
 - coredump storage/processing disabled;
-- conservative dmesg, pointer, ptrace, ASLR, and protected-link sysctls;
+- conservative dmesg, pointer, ptrace, ASLR, unprivileged-BPF/kexec, redirect, and protected-link sysctls;
 - `/boot` FAT32 ESP mounted with `nosuid,nodev,noexec` and restrictive masks;
 - DHCP hostname sending disabled;
 - stable pseudonymous DHCP identifiers where supported;
@@ -102,7 +102,7 @@ SKITTLES favors conservative, auditable defaults rather than aggressive hardenin
 - bounded persistent journal retention and Baloo indexing disabled;
 - LUKS discard/TRIM opt-in only.
 
-These settings improve privacy; they do **not** provide anonymity. DNS uses `systemd-resolved` with network-provided resolvers and DNS-over-TLS disabled. SKITTLES is not Tor or a VPN. See [Privacy](docs/PRIVACY.md).
+These settings improve privacy; they do **not** provide anonymity. DNS uses `systemd-resolved` with network-provided resolvers, DNS-over-TLS disabled, and no configured public fallback resolver. SKITTLES is not Tor or a VPN. See [Privacy](docs/PRIVACY.md).
 
 Encryption also does not provide boot integrity: GRUB, kernels, and initramfs on the ESP are unsigned in this release. Secure Boot must remain disabled.
 

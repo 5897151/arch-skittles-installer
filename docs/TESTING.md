@@ -30,10 +30,11 @@ Use the actual RC downloaded from GitHub after checksum and attestation verifica
 6. Run `skittles-doctor` as the normal user and with `sudo`.
 7. Perform multiple suspend/resume cycles; after each, verify NVIDIA/Wayland responsiveness and inspect warning/error logs.
 8. Boot `linux-lts` and repeat the kernel-dependent NVIDIA/Vulkan/network/firewall/doctor/suspend checks.
-9. For the gaming profile, test Steam login manually, a representative Proton title, `gamemoderun`, MangoHud, 32-bit NVIDIA/Vulkan, and NTSync behavior.
+9. For the gaming profile, run `gamemoded -t`, then test Steam login manually, a representative Proton title, `gamemoderun`, MangoHud, 32-bit NVIDIA/Vulkan, and NTSync behavior. Confirm the normal CPU and split-lock policies return after the GameMode session ends.
 10. Run a normal `pacman -Syu`; if kernel/NVIDIA/initramfs/GRUB components update, complete the update and reboot. Re-verify both kernels and NVIDIA/Wayland.
 11. Boot a current Arch ISO and execute `docs/RECOVERY.md` as written: unlock/mount/chroot, kernel/NVIDIA reinstall where appropriate, initramfs rebuild, GRUB repair/configuration, log inspection, clean exit/unmount, mapping close, and a Linux LTS recovery boot.
-12. Complete the repeated performance procedure in `docs/PERFORMANCE.md`.
+12. Validate Plasma Adaptive Sync/VRR against the actual display when supported; the installer does not change this setting automatically.
+13. Complete every applicable A/B case and the repeated performance procedure in `docs/PERFORMANCE.md`. Keep dm-crypt workqueue bypass, NVIDIA PAT, ReBAR, zram VM candidates, Gamescope, and clocksource alternatives experimental until their own controlled results exist.
 
 Do not rerun the installer to test updates or recovery.
 

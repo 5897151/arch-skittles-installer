@@ -711,7 +711,9 @@ SDDM
 # Apply rules on the installed system's first boot, NEVER to the live ISO.
 cat > /etc/nftables.conf <<'NFT'
 #!/usr/bin/nft -f
-flush ruleset
+# Replace only the table owned by SKITTLES. `destroy` is deliberately
+# idempotent and leaves VPN, container, virtualization and user tables intact.
+destroy table inet skittles
 table inet skittles {
     chain input {
         type filter hook input priority filter; policy drop;
@@ -772,6 +774,7 @@ cat > /etc/systemd/resolved.conf.d/20-skittles-privacy.conf <<'RESOLVER_PRIVACY'
 LLMNR=no
 MulticastDNS=no
 DNSOverTLS=no
+FallbackDNS=
 RESOLVER_PRIVACY
 # install_system establishes the resolver symlink after arch-chroot releases
 # its temporary /etc/resolv.conf bind mount. Keep live-ISO DNS available here.
@@ -795,6 +798,8 @@ desiredgov=performance
 renice=0
 softrealtime=off
 inhibit_screensaver=1
+ioprio=0
+disable_splitlock=1
 GAMEMODE
 fi
 
@@ -813,9 +818,19 @@ kernel.dmesg_restrict = 1
 kernel.kptr_restrict = 2
 kernel.yama.ptrace_scope = 1
 kernel.randomize_va_space = 2
+kernel.unprivileged_bpf_disabled = 1
+kernel.kexec_load_disabled = 1
 fs.suid_dumpable = 0
 fs.protected_hardlinks = 1
 fs.protected_symlinks = 1
+vm.mmap_rnd_bits = 32
+vm.mmap_rnd_compat_bits = 16
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv6.conf.all.accept_redirects = 0
+net.ipv6.conf.default.accept_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
 SYSCTL
 cat > /etc/systemd/coredump.conf.d/10-skittles.conf <<'COREDUMP'
 [Coredump]
@@ -845,7 +860,7 @@ done
 (( kernels == 2 ))
 mkinitcpio -P
 
-cmdline="rd.luks.name=${LUKS_UUID}=skittles-root root=UUID=${ROOT_UUID} rw"
+cmdline="rd.luks.name=${LUKS_UUID}=skittles-root root=UUID=${ROOT_UUID} rw zswap.enabled=0"
 if (( ALLOW_DISCARDS )); then
     cmdline+=" rd.luks.options=${LUKS_UUID}=discard"
     systemctl enable fstrim.timer
@@ -943,8 +958,19 @@ check_line 'dmesg restricted' /proc/sys/kernel/dmesg_restrict '1'
 check_line 'kernel pointers restricted' /proc/sys/kernel/kptr_restrict '2'
 check_line 'ptrace restricted' /proc/sys/kernel/yama/ptrace_scope '1'
 check_line 'full ASLR enabled' /proc/sys/kernel/randomize_va_space '2'
+check_line 'unprivileged BPF disabled' /proc/sys/kernel/unprivileged_bpf_disabled '1'
+check_line 'kexec image loading disabled' /proc/sys/kernel/kexec_load_disabled '1'
+check_line 'setuid core dumps disabled' /proc/sys/fs/suid_dumpable '0'
 check_line 'protected hardlinks enabled' /proc/sys/fs/protected_hardlinks '1'
 check_line 'protected symlinks enabled' /proc/sys/fs/protected_symlinks '1'
+check_line '64-bit mmap ASLR entropy pinned' /proc/sys/vm/mmap_rnd_bits '32'
+check_line '32-bit mmap ASLR entropy pinned' /proc/sys/vm/mmap_rnd_compat_bits '16'
+check_line 'IPv4 redirects disabled (all)' /proc/sys/net/ipv4/conf/all/accept_redirects '0'
+check_line 'IPv4 redirects disabled (default)' /proc/sys/net/ipv4/conf/default/accept_redirects '0'
+check_line 'IPv6 redirects disabled (all)' /proc/sys/net/ipv6/conf/all/accept_redirects '0'
+check_line 'IPv6 redirects disabled (default)' /proc/sys/net/ipv6/conf/default/accept_redirects '0'
+check_line 'IPv4 redirect sending disabled (all)' /proc/sys/net/ipv4/conf/all/send_redirects '0'
+check_line 'IPv4 redirect sending disabled (default)' /proc/sys/net/ipv4/conf/default/send_redirects '0'
 if (( EUID != 0 )); then
     check 'private user home permissions' bash -c '[[ $(stat -c %a "$HOME") == 700 ]]'
     if [[ -r $HOME/.config/baloofilerc ]]; then
@@ -957,7 +983,12 @@ else
 fi
 
 section 'NVIDIA'
-check 'NVIDIA GPU responds' nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
+if nvidia_report=$(nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null); then
+    pass 'NVIDIA GPU responds'
+    info "NVIDIA GPU / driver: $nvidia_report"
+else
+    fail 'NVIDIA GPU responds'
+fi
 check 'NVIDIA packages for linux + linux-lts' pacman -Q nvidia-open nvidia-open-lts nvidia-utils
 nvidia_kernel_count=0
 for kernel_dir in /usr/lib/modules/*; do
@@ -982,6 +1013,8 @@ if [[ -r /proc/driver/nvidia/params ]]; then
     check 'NVIDIA temporary backing path is /var/tmp' grep -Eq '^TemporaryFilePath:[[:space:]]+"?/var/tmp"?$' /proc/driver/nvidia/params
     preserve=$(sed -n 's/^PreserveVideoMemoryAllocations:[[:space:]]*//p' /proc/driver/nvidia/params | head -n1)
     [[ -n $preserve ]] && info "NVIDIA PreserveVideoMemoryAllocations=$preserve"
+    pat=$(sed -n 's/^UsePageAttributeTable:[[:space:]]*//p' /proc/driver/nvidia/params | head -n1)
+    [[ -n $pat ]] && info "NVIDIA UsePageAttributeTable=$pat (reported only; not forced)"
 else
     fail 'NVIDIA runtime parameter file available'
 fi
@@ -995,6 +1028,7 @@ for policy_dir in /sys/devices/system/cpu/cpufreq/policy*; do
     if [[ -r $policy_dir/scaling_driver ]]; then driver=$(<"$policy_dir/scaling_driver"); else driver=unknown; fi
     if [[ -r $policy_dir/scaling_governor ]]; then governor=$(<"$policy_dir/scaling_governor"); else governor=unknown; fi
     printf 'INFO  %s driver=%s governor=%s' "${policy_dir##*/}" "$driver" "$governor"
+    if [[ -r $policy_dir/scaling_available_governors ]]; then printf ' available=%s' "$(<"$policy_dir/scaling_available_governors")"; fi
     if [[ -r $policy_dir/energy_performance_preference ]]; then printf ' epp=%s' "$(<"$policy_dir/energy_performance_preference")"; fi
     printf '\n'
 done
@@ -1002,13 +1036,48 @@ if (( cpu_policy_count > 0 )); then pass 'CPU frequency policy available'; else 
 if [[ -r /sys/devices/system/cpu/intel_pstate/no_turbo ]]; then
     if [[ $(</sys/devices/system/cpu/intel_pstate/no_turbo) == 0 ]]; then pass 'Intel Turbo Boost available to kernel policy'; else info 'Intel Turbo Boost disabled by firmware/kernel policy'; fi
 fi
+if [[ -r /sys/devices/system/clocksource/clocksource0/current_clocksource ]]; then
+    info "current clocksource: $(</sys/devices/system/clocksource/clocksource0/current_clocksource)"
+else
+    fail 'current clocksource readable'
+fi
+if [[ -r /sys/devices/system/clocksource/clocksource0/available_clocksource ]]; then
+    info "available clocksources: $(</sys/devices/system/clocksource/clocksource0/available_clocksource)"
+else
+    fail 'available clocksources readable'
+fi
 
 section 'STORAGE / ZRAM / TRIM'
 check_line 'zram sizing configured' /etc/systemd/zram-generator.conf 'zram-size = min(ram / 2, 4096)'
 check 'zram swap active' bash -c 'swapon --noheadings --show=NAME | grep -Fxq /dev/zram0'
+if [[ -r /sys/module/zswap/parameters/enabled ]]; then
+    zswap_state=$(</sys/module/zswap/parameters/enabled)
+    if [[ $zswap_state == N || $zswap_state == 0 ]]; then pass 'zswap disabled while zram is active'; else fail "zswap disabled while zram is active (found $zswap_state)"; fi
+else
+    fail 'zswap runtime state readable'
+fi
+check 'running kernel command line disables zswap' grep -qw -- 'zswap.enabled=0' /proc/cmdline
+if command -v zramctl >/dev/null 2>&1; then
+    if zram_report=$(zramctl /dev/zram0 2>/dev/null); then printf 'zram state:\n%s\n' "$zram_report"; else fail 'zram0 state readable'; fi
+fi
 if [[ -r /sys/block/zram0/comp_algorithm ]]; then info "zram algorithms: $(</sys/block/zram0/comp_algorithm)"; fi
 printf 'Swap devices:\n'
 swapon --show || true
+for vm_key in swappiness page-cluster watermark_boost_factor watermark_scale_factor; do
+    if [[ -r /proc/sys/vm/$vm_key ]]; then info "vm.$vm_key=$(</proc/sys/vm/$vm_key) (reported only)"; fi
+done
+info "root filesystem: $(findmnt -n -o SOURCE,FSTYPE,OPTIONS / 2>/dev/null || printf unavailable)"
+info "boot filesystem: $(findmnt -n -o SOURCE,FSTYPE,OPTIONS /boot 2>/dev/null || printf unavailable)"
+root_block=$(readlink -f /dev/mapper/skittles-root 2>/dev/null)
+root_block=${root_block##*/}
+root_slave=$(find "/sys/class/block/$root_block/slaves" -mindepth 1 -maxdepth 1 -printf '%f\n' 2>/dev/null | head -n1)
+if [[ -n $root_slave ]]; then
+    parent_disk=$(lsblk -ndo PKNAME "/dev/$root_slave" 2>/dev/null | head -n1)
+    [[ -n $parent_disk ]] || parent_disk=$root_slave
+    for attribute in rotational logical_block_size physical_block_size; do
+        if [[ -r /sys/class/block/$parent_disk/queue/$attribute ]]; then info "$parent_disk $attribute=$(</sys/class/block/$parent_disk/queue/$attribute)"; fi
+    done
+fi
 if [[ -r /etc/skittles-release ]]; then
     discard_setting=$(sed -n 's/^DISCARDS=//p' /etc/skittles-release | head -n1)
     if [[ $discard_setting == 1 ]]; then
@@ -1021,6 +1090,8 @@ if [[ -r /etc/skittles-release ]]; then
 fi
 if (( EUID == 0 )); then
     luks_status=$(cryptsetup status skittles-root 2>/dev/null || true)
+    luks_sector_size=$(sed -n 's/^[[:space:]]*sector size:[[:space:]]*//p' <<<"$luks_status" | head -n1)
+    [[ -n $luks_sector_size ]] && info "LUKS sector size=$luks_sector_size"
     if [[ ${discard_setting:-} == 1 ]]; then
         if grep -q 'discards' <<<"$luks_status"; then pass 'LUKS discard policy matches install choice'; else fail 'LUKS discard policy matches install choice'; fi
     elif [[ ${discard_setting:-} == 0 ]]; then
@@ -1052,6 +1123,7 @@ check_line 'mDNS disabled in NetworkManager defaults' /etc/NetworkManager/conf.d
 check_line 'LLMNR disabled in resolved' /etc/systemd/resolved.conf.d/20-skittles-privacy.conf 'LLMNR=no'
 check_line 'mDNS disabled in resolved' /etc/systemd/resolved.conf.d/20-skittles-privacy.conf 'MulticastDNS=no'
 check_line 'DNS-over-TLS explicitly disabled' /etc/systemd/resolved.conf.d/20-skittles-privacy.conf 'DNSOverTLS=no'
+check_line 'public fallback DNS disabled' /etc/systemd/resolved.conf.d/20-skittles-privacy.conf 'FallbackDNS='
 check_line 'journal size cap configured' /etc/systemd/journald.conf.d/20-skittles-retention.conf 'SystemMaxUse=256M'
 check_line 'journal retention cap configured' /etc/systemd/journald.conf.d/20-skittles-retention.conf 'MaxRetentionSec=14day'
 if command -v nmcli >/dev/null 2>&1; then
@@ -1063,6 +1135,8 @@ section 'FIREWALL'
 if (( EUID == 0 )); then
     check 'Skittles firewall table loaded' nft list table inet skittles
     check 'firewall configuration parses' nft -c -f /etc/nftables.conf
+    check_line 'firewall reload replaces only the SKITTLES table' /etc/nftables.conf 'destroy table inet skittles'
+    if grep -Eq '^[[:space:]]*flush[[:space:]]+ruleset([[:space:]]|$)' /etc/nftables.conf; then fail 'firewall config avoids global ruleset flush'; else pass 'firewall config avoids global ruleset flush'; fi
     check 'firewall input policy is drop' bash -c "nft list chain inet skittles input | grep -q 'policy drop'"
     check 'firewall forward policy is drop' bash -c "nft list chain inet skittles forward | grep -q 'policy drop'"
     check 'firewall output policy is accept' bash -c "nft list chain inet skittles output | grep -q 'policy accept'"
@@ -1070,16 +1144,34 @@ if (( EUID == 0 )); then
     check 'standard kernel boot image' test -s /boot/vmlinuz-linux
     check 'LTS recovery kernel boot image' test -s /boot/vmlinuz-linux-lts
     check 'GRUB contains linux-lts entry' grep -q 'linux-lts' /boot/grub/grub.cfg
+    check 'every GRUB Linux entry disables zswap' awk '/^[[:space:]]*linux(efi)?[[:space:]]/ { seen=1; if ($0 !~ /(^|[[:space:]])zswap.enabled=0([[:space:]]|$)/) bad=1 } END { exit !(seen && !bad) }' /boot/grub/grub.cfg
     check 'NVIDIA modules are late-loaded' grep -Fqx 'MODULES=()' /etc/mkinitcpio.conf
 else
     info 'Run sudo skittles-doctor for firewall, sudo and boot-file inspection'
 fi
 
-section 'GAMING PROFILE'
+section 'DISPLAY / GAMING'
+if [[ ${XDG_SESSION_TYPE:-} == wayland || ${XDG_SESSION_TYPE:-} == x11 ]]; then
+    if command -v vulkaninfo >/dev/null 2>&1; then check 'Vulkan device enumeration' vulkaninfo --summary; else fail 'Vulkan diagnostic tool available'; fi
+else
+    info 'Vulkan enumeration skipped outside a graphical session'
+fi
 if pacman -Q steam >/dev/null 2>&1; then
     check '32-bit NVIDIA and Vulkan libraries' pacman -Q lib32-nvidia-utils lib32-vulkan-icd-loader
     check 'gaming tools' pacman -Q gamemode lib32-gamemode mangohud lib32-mangohud ntsync-autoload
-    if command -v vulkaninfo >/dev/null 2>&1 && [[ ${XDG_SESSION_TYPE:-} == wayland || ${XDG_SESSION_TYPE:-} == x11 ]]; then check 'Vulkan device enumeration' vulkaninfo --summary; fi
+    check_line 'GameMode performance governor explicit' /etc/gamemode.ini 'desiredgov=performance'
+    check_line 'GameMode I/O priority explicit' /etc/gamemode.ini 'ioprio=0'
+    check_line 'GameMode split-lock change is session scoped' /etc/gamemode.ini 'disable_splitlock=1'
+    check 'GameMode group exists' getent group gamemode
+    if (( EUID == 0 )); then
+        gamemode_members=$(getent group gamemode | cut -d: -f4)
+        if [[ -n $gamemode_members ]]; then pass 'installed user belongs to GameMode group'; else fail 'installed user belongs to GameMode group'; fi
+    else
+        check 'current user belongs to GameMode group' bash -c 'id -nG "$USER" | tr " " "\n" | grep -Fxq gamemode'
+    fi
+    check 'NTSync module is available' modprobe -n ntsync
+    if [[ -e /dev/ntsync ]]; then pass 'NTSync device active'; else info 'NTSync device not active (load/use may be session dependent)'; fi
+    info 'Physical GameMode validation remains: gamemoded -t'
 else
     info 'Minimal profile: Steam/GameMode stack not installed'
 fi
@@ -1107,6 +1199,7 @@ hardware test before you rely on it.
 GAMING PROFILE
 Open Steam as your normal user. Sign in yourself; the installer never signs in.
 Use Steam's Compatibility settings to choose its supplied Proton versions.
+Validate GameMode from a terminal with: gamemoded -t
 Optional per-game launch option: gamemoderun mangohud %command%
 If a game fails, first retry without these wrappers. Anti-cheat compatibility
 depends on the game/publisher; neither Proton nor this installer guarantees it.
@@ -1115,7 +1208,7 @@ No global FPS cap, GPU overclock, injected overlay, or Proton download is forced
 PRIVACY
 Root is encrypted, but the EFI partition/kernel/initramfs are unsigned and visible.
 The firewall is not a VPN, browser sandbox, or anonymity tool. Network-provided DNS
-is routed through systemd-resolved but is not encrypted by this installer.
+is routed through systemd-resolved without public fallback or encryption by SKITTLES.
 Captive-portal auto-detection and DHCP hostname announcements are disabled. Wi-Fi
 association MACs are stable per SSID. Your network still sees connection metadata.
 Journal retention is capped at 14 days/256 MiB on the encrypted root.

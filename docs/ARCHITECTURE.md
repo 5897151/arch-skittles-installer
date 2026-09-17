@@ -64,19 +64,19 @@ Passwords are delivered to the chroot over stdin as NUL-separated values rather 
 
 ## Boot configuration
 
-SKITTLES uses GRUB in UEFI mode, creates both the normal `SKITTLES` EFI entry and a removable fallback `EFI/BOOT/BOOTX64.EFI`, and generates entries for `linux` and `linux-lts`. The kernel command line unlocks the LUKS UUID through `sd-encrypt` and selects the ext4 root UUID.
+SKITTLES uses GRUB in UEFI mode, creates both the normal `SKITTLES` EFI entry and a removable fallback `EFI/BOOT/BOOTX64.EFI`, and generates entries for `linux` and `linux-lts`. The shared kernel command line unlocks the LUKS UUID through `sd-encrypt`, selects the ext4 root UUID, and sets `zswap.enabled=0` so the zram swap device is not fronted by zswap on Arch kernels.
 
 NVIDIA modules are late-loaded rather than embedded in initramfs. Current Arch `nvidia-open` / `nvidia-open-lts` packages supply modules for the two supported kernels. The installer verifies both module trees before finalizing initramfs and boot configuration.
 
 ## Networking/privacy layer
 
-nftables is parsed before service enablement. NetworkManager is ordered after nftables and `systemd-resolved`. NetworkManager owns connection management but sends DNS to resolved; `/etc/resolv.conf` points at the resolved stub.
+nftables is parsed before service enablement. Its configuration idempotently destroys and recreates only `table inet skittles`; it never flushes the global ruleset, so separately owned VPN, container, virtualization, and user tables survive a SKITTLES firewall reload. NetworkManager is ordered after nftables and `systemd-resolved`. NetworkManager owns connection management but sends network-provided DNS to resolved; `/etc/resolv.conf` points at the resolved stub and `FallbackDNS=` disables compiled-in public fallback resolvers.
 
 Privacy defaults are documented in [PRIVACY.md](PRIVACY.md). They reduce broadcast/stable-hardware identity leakage but do not create anonymity or encrypted DNS.
 
 ## Gaming profile
 
-The gaming profile enables multilib and adds Steam, 32-bit NVIDIA/Vulkan libraries, GameMode, MangoHud, and `ntsync-autoload`. GameMode may request the performance governor for a game launched with `gamemoderun`; no persistent performance governor, GPU overclock, or global overlay injection is configured.
+The gaming profile enables multilib and adds Steam, 32-bit NVIDIA/Vulkan libraries, GameMode, MangoHud, and `ntsync-autoload`. GameMode may request the performance governor, best-effort I/O priority 0, and a session-scoped split-lock mitigation change only for participating games. No persistent performance governor, global split-lock change, GPU overclock, or global overlay injection is configured.
 
 ## Failure cleanup
 
@@ -86,4 +86,4 @@ If installation fails before completion, extra wipe-only disks remain untouched.
 
 ## Doctor
 
-`skittles-doctor` is installed at `/usr/local/bin/skittles-doctor`. It is local, read-only, does not upload data, does not repair configuration, and never invokes sudo itself. It reports boot/security, NVIDIA, CPU, storage/zram/TRIM, networking/privacy, firewall, gaming, and failed-service state. Root-only checks are available when the user explicitly runs `sudo skittles-doctor`.
+`skittles-doctor` is installed at `/usr/local/bin/skittles-doctor`. It is local, read-only, does not upload data, does not repair configuration, and never invokes sudo itself. It reports boot/security, NVIDIA module state, CPU policy/clocksources, zram/zswap/swap, storage geometry/LUKS state, networking/privacy, firewall ownership, display/Vulkan/GameMode/NTSync, and failed-service state. Root-only checks are available when the user explicitly runs `sudo skittles-doctor`.
