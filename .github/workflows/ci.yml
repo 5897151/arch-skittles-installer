@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Show static-analysis version
+        run: shellcheck --version
+
+      - name: Require complete documentation and test tree
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for file in tests/test_docs.py tests/test_github.py tests/test_installer.py tests/test_release_metadata.py \
+            docs/ARCHITECTURE.md docs/GITHUB-METADATA.md docs/PRIVACY.md docs/RECOVERY.md \
+            docs/RELEASE-AUDIT.md docs/SECURITY-MODEL.md docs/LICENSE-OPTIONS.md docs/PERFORMANCE.md \
+            docs/RELEASE-DECISION.md docs/RELEASE-NOTES-v1.0.0-rc.1.md docs/RELEASE-NOTES-v1.0.0.md \
+            docs/RELEASE.md docs/TESTING.md release-signoff.json scripts/check_release_signoff.py scripts/audit_repository.py; do
+            test -s "$file" || { echo "Required source file missing or empty: $file" >&2; exit 1; }
+          done
+
+      - name: Bash syntax
+        run: bash -n skittles-installer.sh
+
+      - name: ShellCheck
+        run: shellcheck skittles-installer.sh
+
+      - name: Unit and generated-config tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Repository hygiene scan
+        run: python3 scripts/audit_repository.py
+
+      - name: Whitespace sanity
+        run: git diff --check
