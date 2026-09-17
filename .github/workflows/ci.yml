@@ -22,6 +22,18 @@ jobs:
       - name: Show static-analysis version
         run: shellcheck --version
 
+      - name: Require complete documentation and test tree
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for file in tests/test_docs.py tests/test_github.py tests/test_installer.py tests/test_release_metadata.py \
+            docs/ARCHITECTURE.md docs/GITHUB-METADATA.md docs/PRIVACY.md docs/RECOVERY.md \
+            docs/RELEASE-AUDIT.md docs/SECURITY-MODEL.md docs/LICENSE-OPTIONS.md docs/PERFORMANCE.md \
+            docs/RELEASE-DECISION.md docs/RELEASE-NOTES-v1.0.0-rc.1.md docs/RELEASE-NOTES-v1.0.0.md \
+            docs/RELEASE.md docs/TESTING.md; do
+            test -s "$file" || { echo "Required source file missing or empty: $file" >&2; exit 1; }
+          done
+
       - name: Bash syntax
         run: bash -n skittles-installer.sh
 

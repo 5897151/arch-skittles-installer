@@ -119,22 +119,7 @@ Before publishing a tag:
 
 ## Real GitHub validation record
 
-Hosted GitHub Actions has now executed against the public repository. The first hosted run is evidence of the environment and static-analysis behavior, but it is **not a green release gate** because the web upload omitted release-infrastructure files required by the test suite.
-
-Recorded run:
-
-- repository: `5897151/arch-skittles-installer`;
-- workflow: `CI`;
-- run ID: `35165611372`;
-- run URL: `https://github.com/5897151/arch-skittles-installer/actions/runs/35165611372`;
-- tested commit: `18fb447a098d99d3eb3a8255688f1fe0c72c46ad`;
-- Bash syntax: **PASS**;
-- ShellCheck 0.9.0: **PASS**;
-- unit/config/documentation tests: **FAIL**, because `.github/workflows/release.yml`, `.github/ISSUE_TEMPLATE/bug_report.yml`, and `.github/dependabot.yml` were absent from the uploaded GitHub tree; 40 tests were reached and nine errors were missing-file errors;
-- whitespace step: skipped after the test-step failure;
-- `GITHUB_TOKEN` permissions observed in the hosted log: `contents: read`, `metadata: read`; no repository secrets were required.
-
-The intended local RC tree contains the missing files and passes all 46 tests. The next hosted run must test the reconciled tree and finish Bash syntax, ShellCheck, all tests, and whitespace checks successfully before an RC tag is created.
+See [RELEASE-DECISION.md](RELEASE-DECISION.md) for the exact source commit, hosted run and local validation evidence. Public run `35170020735` is green but incomplete: only seven tests executed. The restored union passes 46 tests locally; its push and full hosted validation are blocked pending explicit approval in chat. No release provenance is claimed from the existence of an attestation step.
 
 ## Current status
 

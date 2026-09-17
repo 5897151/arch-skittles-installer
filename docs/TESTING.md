@@ -19,17 +19,11 @@ Destructive tools are mocked. The zero-wipe byte-count regression uses real `dd`
 
 ### Current automated status
 
-- local `bash -n`: PASS
-- local Python/unit/config/documentation/release consistency suite: PASS (46 tests)
-- local `git diff --check`: PASS
-- local YAML parse: PASS
-- local ShellCheck: unavailable in this build container
-- GitHub-hosted Bash syntax: PASS on run `35165611372`
-- GitHub-hosted ShellCheck 0.9.0: PASS on run `35165611372`
-- GitHub-hosted Python suite: not yet green because that GitHub commit omitted several `.github` files required by tests; reconcile the tree and rerun before tagging
+The restored union passes 46 local tests across all four modules. Bash syntax, five GitHub YAML files and whitespace checks pass locally. Local ShellCheck is unavailable.
 
-The hosted workflow is the authoritative ShellCheck environment. Do not treat the first hosted run as green CI until the reconciled tree completes all tests and whitespace checks.
+Hosted run `35170020735` passed Bash and ShellCheck 0.9.0 on public commit `d2331a1c586907a6a6a16ada1179eb9d54484314`, but ran only seven tests. It is not the full release gate. The union repair has not been pushed or tested on GitHub because automatic approval review blocked that remote action.
 
+See [RELEASE-DECISION.md](RELEASE-DECISION.md) for exact commit/run evidence and [RELEASE-AUDIT.md](RELEASE-AUDIT.md) for open defects. Do not begin release sign-off from an untagged local checkout.
 
 ## Read-only hardware evidence sequence
 
