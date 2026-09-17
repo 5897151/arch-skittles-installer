@@ -1,49 +1,51 @@
 # SKITTLES release audit
 
-Status: release candidate audit. This file records the state found before the ordered release-hardening checkpoints. It is not a stable-release sign-off.
+Status: **NOT READY FOR v1.0.0**. Updated 2026-09-17 from the actual repository and hosted logs. Automated evidence and hardware evidence are separate.
 
-## Confirmed issues
+## Automated/static evidence
 
-- The workspace currently has no owner-authorized software license. Public source without a license is not open-source software; `v1.0.0` is blocked until the owner selects a license.
-- The repository is incomplete for a public release: there is no production `README.md`, test suite, CI/release workflow, security policy, contribution guide, recovery guide, or release documentation yet.
-- The existing `README.upstream.md` predates current installer behavior. In particular, it describes older package/profile and NVIDIA/power-management behavior, so documentation drift is already present.
-- No performance measurements are present. The current permanent `performance` CPU governor is therefore an unmeasured policy choice, not a demonstrated optimization.
-- No automated regression suite currently exists in this workspace, so destructive-operation invariants are not yet covered by mocks/tests here.
-- No repository-history secret scan can be meaningful beyond the new local baseline because the original project history was not supplied.
+| Area | Status | Evidence / limitation |
+| --- | --- | --- |
+| Local repository union | PASS | Nine exact historical files restored in `2bb7bff68a5ba63c24eb2dbfce5246c851f051a3`; no unrelated deletion |
+| Full local suite | PASS | 46 tests, all four modules; mocks and one ordinary temporary-file overwrite |
+| Bash / YAML / whitespace | PASS | See [RELEASE-DECISION.md](RELEASE-DECISION.md) |
+| Local relative file links | PASS | All Markdown scanned; anchor checking not performed |
+| Available history secret patterns | PASS | 42 unique blobs scanned, no pattern findings; not a comprehensive secret guarantee |
+| Hosted full suite | BLOCKED | Push approval required; current hosted green ran only seven tests |
+| Local ShellCheck | BLOCKED | Not installed; hosted 0.9.0 passed unchanged installer on public baseline |
+| Final release assets / provenance | BLOCKED | License and tagged publication gates not satisfied |
+| Hardware / recovery / performance | NOT TESTED | No target-machine execution or measurements |
+| Secure Boot support | N/A | Explicitly unsupported for this release |
 
-## Stale or provisional behavior
+## Source-review findings requiring follow-up
 
-- NVIDIA handling is in transition: the script already contains partial 595+ suspend changes, but package choice, suspend services/notifiers, KMS/fbdev settings, both kernel builds, and doctor checks still require one coherent current-source pass before they can be treated as release-ready.
-- Networking/privacy is also provisional: NetworkManager and `systemd-resolved` settings were partially added, but their generated configuration, DHCP identity policy, Wi-Fi MAC policy, resolver ownership, and doctor verification have not yet been validated together.
-- The installer still forces the CPU `performance` governor persistently at boot and requires that governor during preflight. This must be replaced with a hardware-aware baseline; GameMode should remain the on-demand gaming optimization layer.
-- Storage policy (ext4 `noatime`, zram sizing/compression, optional LUKS discards/fstrim) needs a focused review to separate justified defaults from unnecessary tuning.
-- The doctor is incomplete as a release diagnostic: it needs a final coherent view of boot/security, NVIDIA, CPU, storage/zram, firewall, resolver, NetworkManager privacy settings, and failed services.
+1. **Chroot resolver replacement:** current upstream `arch-chroot` bind-mounts the live resolver onto the target `/etc/resolv.conf` unless `-r` is requested. SKITTLES invokes `arch-chroot` without `-r`, then its generated helper runs `ln -sf` on that path. Replacing a mounted file can fail with `EBUSY`, interrupting installation after destructive work. The correction must preserve DNS during configuration and establish the installed resolved symlink after the temporary mount is released. Add an ordinary-file/mock regression; do not test against real block devices. [Upstream implementation](https://gitlab.archlinux.org/archlinux/arch-install-scripts/-/blob/master/arch-chroot.in).
+2. **Recovery resolver instructions:** review the manual `/mnt/run` stub-copy workaround against chroot API filesystem setup; verify resolver handling inside the actual current Arch ISO. The recovery guide has not been executed.
+3. **Doctor accuracy:** failed-service lookup currently suppresses command errors and can report PASS for empty output on failure. Console sessions can be reported as failed Wayland sessions. Review status semantics and add safe tests before treating diagnostics as a sign-off gate.
+4. **Stable publication gate:** the workflow checks particular `NOT TESTED` and draft markers, but does not positively validate every required sign-off row as PASS. A FAIL row or removed table must not permit stable publication. Strengthen with negative fixtures before any stable tag.
+5. **Final safety review:** identity checks, plan authorization, ownership cleanup and extra-wipe ordering are present. Additional adversarial/failure coverage and a per-write identity review remain open; their presence is not proof against races with other privileged processes.
 
-## Release blockers
+The mandate freezes installer changes until the complete hosted baseline is green. No installer behavior was changed during this blocked repair. These findings must be resolved or explicitly dispositioned before claiming automated completion.
 
-- Owner-authorized license is missing.
-- Current NVIDIA/Arch behavior has not completed the dedicated correctness checkpoint.
-- Networking/privacy configuration has not completed generated-config validation.
-- CPU/performance policy has not been replaced and measured.
-- Destructive-operation, profile, version/config, and generated-config tests are missing.
-- CI and release artifact/provenance workflows are missing.
-- Production documentation and recovery instructions are missing or stale.
-- Release artifacts/checksums have not been built and verified.
-- Real-hardware release-candidate installation and recovery testing has not been performed or recorded.
+## Upstream checks performed
 
-## Hardware-only tests still required
+Current pages were retrieved on 2026-09-17:
 
-The following must remain `NOT TESTED` until run on the supported Intel Core i7-8700K + RTX 3060 Ti machine from an RC artifact:
+- [Arch NVIDIA](https://wiki.archlinux.org/title/NVIDIA) lists prebuilt open modules for both `linux` and `linux-lts` for Ampere. No reason found in that source to substitute DKMS for this two-kernel desktop.
+- [Arch NVIDIA power management](https://wiki.archlinux.org/title/NVIDIA/Tips_and_tricks#Preserve_video_memory_after_suspend) describes the 595+ kernel suspend notifier strategy, disabled legacy services, and `/var/tmp` backing path. This supports the intended architecture; it is not runtime validation.
+- [NetworkManager configuration](https://networkmanager.dev/docs/api/latest/NetworkManager.conf.html) documents forwarding DNS to systemd-resolved without replacing its stub symlink. Connection-specific effective privacy behavior remains a runtime gate.
+- [actions/attest](https://github.com/actions/attest) documents artifact-metadata permissions as well as attestations and OIDC. Do not remove that permission solely on the basis of older action guidance.
 
-- clean install from a current official Arch ISO; repeated LUKS unlocks; cold boot and warm reboot;
-- boot `linux` and `linux-lts`, including recovery selection through GRUB;
-- Plasma Wayland login/logout, lock/unlock, NVIDIA acceleration, Vulkan, and multi-hour idle;
-- CPU-load and GPU-load stability; measured comparison of any shipped performance policy;
-- Ethernet/networking, DHCP renewal, DNS through the configured resolver, IPv6 when available, and nftables ordinary-connectivity behavior;
-- suspend/resume with the current NVIDIA driver path;
-- gaming profile: Steam, Proton, GameMode, MangoHud, NTSync, and 32-bit NVIDIA/Vulkan libraries;
-- audio and representative USB devices;
-- full package upgrade, kernel update, NVIDIA update, and subsequent boots of both kernels;
-- `skittles-doctor` as user and with `sudo` after installation and after updates;
-- documented Arch-ISO recovery procedure, including LUKS unlock, chroot, bootloader repair, initramfs rebuild, NVIDIA reinstall, LTS boot, clean unmount, and mapping close;
-- if possible, a second clean install using the exact RC release bundle rather than the working tree.
+The full current official package inventory, remaining upstream compatibility checks, release reproducibility and final security review are **not complete**. Do not infer completion from these targeted source checks.
+
+## Hardware gate
+
+All physical results remain **NOT TESTED**: clean install, repeated LUKS unlock, both kernels, Plasma Wayland, NVIDIA/Vulkan, repeated suspend/resume, networking/DNS/IPv6, firewall, audio/USB, gaming, normal Arch updates, recovery ISO, and performance measurements. Use [TESTING.md](TESTING.md) and [PERFORMANCE.md](PERFORMANCE.md) after the owner-authorized license, published RC verification and open code findings are resolved.
+
+## Owner / access blockers
+
+- Explicit approval in chat to push the prepared repair to public `main` and continue hosted validation.
+- Owner license selection; no license has been selected or added.
+- Physical i7-8700K + RTX 3060 Ti validation from the actual downloaded RC.
+
+No stable release or RC tag was created.

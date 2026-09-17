@@ -2,34 +2,49 @@
 
 ## NOT READY FOR v1.0.0
 
-The repository is in release-candidate state at `1.0.0-rc.1`. Automated local checks are healthy and GitHub-hosted Bash/ShellCheck have executed successfully, but the hosted test gate is not yet green because the public tree is missing release-infrastructure files. Owner license selection and target-hardware validation also remain open.
+Source version: `1.0.0-rc.1`. The missing documentation and test modules have been restored locally. The full hosted baseline is still blocked; local success is not a hosted or hardware release gate.
 
-## Completed locally
+## Repository repair evidence
 
-- `bash -n skittles-installer.sh`: PASS.
-- Python/unit/config/documentation/workflow suite: PASS, 46 tests.
-- `git diff --check`: PASS.
-- GitHub workflow/issue/dependabot YAML parse: PASS.
-- Current tracked-tree secret-pattern scan: PASS for private-key headers, common GitHub/AWS token forms, credentialed URLs, and Wi-Fi PSK assignments.
-- Local Git history secret-pattern scan: PASS for the same patterns.
-- Tracked binary/NUL-byte scan: PASS; no binary blobs found.
-- Literal personal-home-path scan: PASS.
-- Generated-junk scan: PASS.
-- Destructive tests use mocks; the exact-byte overwrite regression writes only to an ordinary temporary file.
+- Observed public `main`: `d2331a1c586907a6a6a16ada1179eb9d54484314`.
+- Local union repair: `2bb7bff68a5ba63c24eb2dbfce5246c851f051a3`.
+- Exactly nine files restored from `43e9e4ef10b45cc0367fea57a76789c21c1b9850`; no existing files deleted or replaced.
+- All four Python test modules discovered: docs, GitHub, installer, release metadata.
+- Installer bytes unchanged from public `main` (Git blob `66687ea9d3a41ea68beb8aa1887c9df859181139`).
+- Follow-up documentation and CI completeness checks do not change installer behavior. Use `git rev-parse HEAD` for their containing commit; this document does not claim a hosted result for that commit.
 
-The imported repository does not include the project's complete pre-audit history, so the local history scan cannot prove older upstream history is clean.
+## Local automated evidence
 
-## Hosted GitHub CI status
+At the union repair commit:
 
-GitHub Actions run `35165611372` tested commit `18fb447a098d99d3eb3a8255688f1fe0c72c46ad` on Ubuntu 24.04.
+| Check | Result |
+| --- | --- |
+| Bash syntax | PASS |
+| Python discovery | PASS, 46 tests across all four modules |
+| All five GitHub YAML files | PASS, PyYAML 6.0.3 |
+| Staged whitespace | PASS |
+| Relative Markdown file links | PASS, 13 links across all Markdown; anchors not validated |
+| Tracked binary/NUL and junk scan | PASS, no findings |
+| Secret-pattern scan | PASS, no findings across 42 unique blobs in available Git history |
+| Local ShellCheck | BLOCKED, executable unavailable |
 
-- Bash syntax: **PASS**.
-- ShellCheck 0.9.0: **PASS**.
-- Hosted token permissions: `contents: read`, `metadata: read`; no repository secrets were required.
-- Unit/config/documentation stage: **FAIL**, with nine missing-file errors because the web-uploaded repository omitted `.github/workflows/release.yml`, `.github/ISSUE_TEMPLATE/bug_report.yml`, `.github/dependabot.yml`, and related hidden release files.
-- Whitespace step: skipped because the prior test step failed.
+The secret scan covered private-key headers, common GitHub/AWS token forms, bearer tokens, credential-bearing URLs, literal Wi-Fi PSK assignments, and personal home paths. Pattern scanning is not proof that arbitrary credentials or identifying data are absent. History coverage is limited to Git objects available in the clone.
 
-This is a repository-reconciliation failure, not an installer test failure. The local intended tree contains the missing files and passes all 46 tests. A new hosted run against the reconciled tree must be green before tagging an RC. Local ShellCheck remains unavailable, so the successful hosted ShellCheck result is authoritative for the tested GitHub commit.
+## Hosted GitHub CI evidence
+
+[Run 35170020735](https://github.com/5897151/arch-skittles-installer/actions/runs/35170020735) tested **only** `d2331a1c586907a6a6a16ada1179eb9d54484314`:
+
+- Bash syntax: PASS.
+- ShellCheck **0.9.0**: PASS.
+- Python: **7 tests PASS**, all from `test_github.py`; insufficient for the required release gate.
+- Whitespace: PASS.
+- Observed token permissions: contents read, metadata read.
+
+The restored 46-test tree has **not** run on GitHub. Automatic approval review rejected the push to public `main`, because it did not accept the attached mandate as direct authorization for that remote mutation. Explicit owner approval in chat is needed to publish the prepared commits. No alternative remote mutation was attempted.
+
+## Review still open
+
+See [RELEASE-AUDIT.md](RELEASE-AUDIT.md). In particular, current `arch-chroot` resolver bind-mount behavior conflicts with the generated script replacing `/etc/resolv.conf`. This is a source-review finding, not a reproduced hardware failure. Installer changes remain frozen until the complete hosted baseline passes, then this requires a regression test and repair before hardware validation.
 
 ## Publication blocker
 
@@ -56,7 +71,7 @@ Every item below remains `NOT TESTED` on the supported i7-8700K + RTX 3060 Ti ma
 
 ## Release-asset validation still required
 
-Because the license gate is unresolved and no tag/remote release exists, no official release assets or final hashes have been produced. Before stable release, the actual tagged workflow must create and publish:
+The license gate is unresolved. The GitHub releases endpoint returned no releases on 2026-09-17; no published release assets or provenance have been verified. Before stable release, the actual tagged workflow must create and publish:
 
 - `skittles-1.0.0.tar.gz`;
 - `skittles-installer-1.0.0.sh`;
