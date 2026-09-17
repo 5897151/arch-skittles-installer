@@ -15,7 +15,7 @@ SKITTLES ships only performance behavior that has a clear purpose and bounded do
 
 ## CPU/GameMode architecture
 
-The installer verifies CPU frequency policy support but does not create a permanent governor service. On the gaming profile, `/etc/gamemode.ini` requests `desiredgov=performance`; that applies only when GameMode is used. `skittles-doctor` reports the active scaling driver, governor, energy-performance preference where available, and Turbo availability.
+The installer verifies CPU frequency policy support but does not create a permanent governor service. On the gaming profile, `/etc/gamemode.ini` requests `desiredgov=performance`; that applies only when GameMode is used. `disable_splitlock=0` deliberately keeps the kernel split-lock mitigation enabled: disabling it is a security/reliability tradeoff, not a default performance optimization, and no i7-8700K evidence justifies that tradeoff. `skittles-doctor` reports the active scaling driver, governor, energy-performance preference where available, and Turbo availability.
 
 This approach does not disable thermal controls or firmware power limits and does not overclock the i7-8700K.
 
@@ -27,10 +27,10 @@ Before `v1.0.0`, measure on the supported i7-8700K + RTX 3060 Ti system from the
 | --- | --- | --- | --- |
 | 1. Baseline | Published pre-change behavior and normal desktop policy | Capture untouched baseline before interpreting later deltas | **NOT TESTED** |
 | 2. zswap + zram | zswap active versus `zswap.enabled=0`, with the same zram configuration | Memory-pressure workload; zram/zswap counters, latency and CPU cost | **NOT TESTED** |
-| 3. GameMode | identical launch with and without `gamemoderun` | Confirm policy restoration; run `gamemoded -t` before game measurements | **NOT TESTED** |
+| 3. GameMode | identical launch with and without `gamemoderun` | Confirm governor restoration and that split-lock mitigation remains enabled; run `gamemoded -t` before game measurements | **NOT TESTED** |
 | 4. Plasma VRR | Adaptive Sync off versus on, where the physical monitor supports it | Same display mode/FPS range; inspect stutter, tearing and frametime variance | **NOT TESTED** |
 | 5. dm-crypt workqueues | default versus `no_read_workqueue` + `no_write_workqueue` | Storage-focused A/B only; monitor CPU, throughput, latency and regressions | **NOT TESTED** |
-| 6. NVIDIA PAT | packaged default versus explicit PAT only if the current driver still exposes a meaningful choice | Confirm runtime state and driver applicability first; never infer benefit from load success | **NOT TESTED** |
+| 6. NVIDIA PAT | applicability check first; current `nvidia-open` 610+ removed the old PAT module option | Do not invent a replacement knob; record `N/A` rationale in notes unless a current supported mechanism exists | **NOT TESTED** |
 | 7. ReBAR | firmware ReBAR off versus on, only if motherboard/GPU/driver expose both states | Record firmware setting and detected state; do not manipulate it automatically | **NOT TESTED** |
 | 8. zram VM candidates | current defaults versus isolated candidates such as swappiness/page-cluster changes | One variable at a time under memory pressure; no blind ArchWiki bundle | **NOT TESTED** |
 | 9. Gamescope | native compositor path versus an explicit per-game Gamescope test | Optional and game-specific; never wrap all games by default | **NOT TESTED** |

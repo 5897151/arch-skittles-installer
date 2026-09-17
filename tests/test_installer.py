@@ -230,6 +230,44 @@ assert_authorized_drive /dev/sdb id-b 200
         function = re.search(r"^disk_identity\(\) \{\n.*?^\}", TEXT, re.M | re.S).group(0)
         self.assertIn("MAJ:MIN,SIZE,MODEL,SERIAL,WWN", function)
 
+    def test_persistent_identity_requires_serial_or_wwn(self):
+        for value in ["", " ", "   \t  "]:
+            with self.subTest(value=value):
+                self.assertNotEqual(run_bash(f"persistent_disk_id_present {shlex.quote(value)}").returncode, 0)
+        for value in ["SERIAL123 ", " WWN123", "SERIAL123 WWN123"]:
+            with self.subTest(value=value):
+                self.assertEqual(run_bash(f"persistent_disk_id_present {shlex.quote(value)}").returncode, 0)
+
+    def test_preflight_pacman_workspace_is_traverse_only_for_download_user(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            work = root / "work"
+            src = root / "pacman.conf"
+            src.write_text("[options]\nDownloadUser = alpm\n", encoding="utf-8")
+            body = f"""
+PROFILE=minimal
+mktemp() {{ mkdir -m 0700 {shlex.quote(str(work))}; printf '%s\n' {shlex.quote(str(work))}; }}
+prepare_pacman_config() {{ cp {shlex.quote(str(src))} "$2"; }}
+prepare_preflight_pacman_workspace
+printf '%s %s %s\n' "$(stat -c %a "$WORKDIR")" "$(stat -c %a "$WORKDIR/db")" "$(stat -c %a "$WORKDIR/cache")"
+"""
+            proc = run_bash(body)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertEqual(proc.stdout.strip(), "711 755 755")
+            self.assertIn("DownloadUser = alpm", (work / "pacman.conf").read_text())
+
+    def test_preflight_resolves_packages_before_disk_selection(self):
+        preflight = re.search(r"^preflight\(\) \{\n.*?^\}", TEXT, re.M | re.S).group(0)
+        self.assertLess(preflight.index("pacman --config"), preflight.index("select_drives"))
+        self.assertLess(preflight.index("choose_profile"), preflight.index("select_drives"))
+        self.assertLess(preflight.index("(( CHECK_ONLY )) && return 0"), preflight.index("select_drives"))
+
+    def test_check_mode_exits_before_disk_selection(self):
+        preflight = re.search(r"^preflight\(\) \{\n.*?^\}", TEXT, re.M | re.S).group(0)
+        self.assertIn("(( CHECK_ONLY )) && return 0", preflight)
+        self.assertLess(preflight.index("-Sp --noconfirm"), preflight.index("(( CHECK_ONLY )) && return 0"))
+        self.assertLess(preflight.index("(( CHECK_ONLY )) && return 0"), preflight.index("select_drives"))
+
 
 class DestructivePathMockTests(unittest.TestCase):
     def test_destructive_functions_keep_plan_and_identity_guards(self):
@@ -315,6 +353,204 @@ clear_disk /dev/TESTDISK fake-id 999
             self.assertIn("sgdisk:--zap-all /dev/TESTDISK", lines)
             self.assertIn("partprobe:/dev/TESTDISK", lines)
             self.assertIn("udevadm:settle --timeout=30", lines)
+
+    def test_failure_reporting_distinguishes_all_three_write_states(self):
+        cases = [
+            (0, 0, "before any disk writes", "were not modified"),
+            (0, 1, "after destructive disk operations began", "cannot be rolled back automatically"),
+            (1, 1, "Arch installed successfully", "extra-drive wipe stage did not finish"),
+        ]
+        for installed, writes, first, second in cases:
+            with self.subTest(installed=installed, writes=writes):
+                proc = run_bash(f"""
+warn() {{ printf '%s\n' "$*"; }}
+ARCH_INSTALLED={installed}
+DESTRUCTIVE_WRITES_STARTED={writes}
+report_failure 23
+""")
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertIn(first, proc.stdout)
+                self.assertIn(second, proc.stdout)
+
+    def test_signal_exit_codes_before_writes_report_no_disk_modification(self):
+        for rc in (130, 143):
+            proc = run_bash(f"""
+warn() {{ printf '%s\n' "$*"; }}
+ARCH_INSTALLED=0
+DESTRUCTIVE_WRITES_STARTED=0
+report_failure {rc}
+""")
+            self.assertIn("before any disk writes", proc.stdout)
+            self.assertIn(f"exit {rc}", proc.stdout)
+
+    def test_write_state_changes_only_after_authorization_and_identity_checks(self):
+        fail = run_bash("""
+set -e
+require_approved_plan() { :; }
+assert_authorized_drive() { :; }
+assert_same_disk() { return 19; }
+WIPE_MODE=signatures
+DESTRUCTIVE_WRITES_STARTED=0
+clear_disk /dev/TEST fake 1
+""")
+        self.assertNotEqual(fail.returncode, 0)
+        # A successful mocked write path marks the transaction destructive.
+        ok = run_bash("""
+require_approved_plan() { :; }
+assert_authorized_drive() { :; }
+assert_same_disk() { :; }
+lsblk() { printf '/dev/TEST\n'; }
+wipefs() { :; }
+sgdisk() { :; }
+partprobe() { :; }
+udevadm() { :; }
+WIPE_MODE=signatures
+DESTRUCTIVE_WRITES_STARTED=0
+clear_disk /dev/TEST fake 1
+printf '%s' "$DESTRUCTIVE_WRITES_STARTED"
+""")
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        self.assertEqual(ok.stdout, "1")
+
+    def test_signal_exit_codes_after_writes_report_destructive_state(self):
+        for rc in (130, 143):
+            proc = run_bash(f"""
+warn() {{ printf '%s\n' "$*"; }}
+ARCH_INSTALLED=0
+DESTRUCTIVE_WRITES_STARTED=1
+report_failure {rc}
+""")
+            self.assertIn("after destructive disk operations began", proc.stdout)
+            self.assertIn(f"exit {rc}", proc.stdout)
+
+    def test_first_target_wipe_failure_is_reported_as_destructive(self):
+        proc = run_bash(r"""
+set -Eeuo pipefail
+warn() { printf '%s\n' "$*"; }
+log() { :; }
+require_approved_plan() { :; }
+assert_authorized_drive() { :; }
+assert_same_disk() { :; }
+lsblk() { printf '/dev/TEST\n/dev/TEST1\n'; }
+wipefs() { return 17; }
+sgdisk() { printf 'SGDISK_SHOULD_NOT_RUN\n'; }
+partprobe() { :; }
+udevadm() { :; }
+WIPE_MODE=signatures
+ARCH_INSTALLED=0
+DESTRUCTIVE_WRITES_STARTED=0
+trap 'rc=$?; report_failure "$rc"' EXIT
+clear_disk /dev/TEST fake 1
+""")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("after destructive disk operations began", proc.stdout)
+        self.assertNotIn("SGDISK_SHOULD_NOT_RUN", proc.stdout)
+
+    def test_extra_drive_wipe_failure_reports_target_install_success(self):
+        proc = run_bash(r"""
+set -Eeuo pipefail
+warn() { printf '%s\n' "$*"; }
+section() { :; }
+log() { :; }
+require_approved_plan() { :; }
+clear_disk() { return 29; }
+ARCH_INSTALLED=1
+DESTRUCTIVE_WRITES_STARTED=1
+TARGET_INDEX=0
+DRIVES=(/dev/TESTA /dev/TESTB)
+DRIVE_IDS=(a b)
+DRIVE_BYTES=(100 200)
+EXTRA_INDICES=(1)
+trap 'rc=$?; report_failure "$rc"' EXIT
+wipe_extra_drives
+""")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("Arch installed successfully", proc.stdout)
+        self.assertIn("extra-drive wipe stage did not finish", proc.stdout)
+
+    def test_identity_disappearance_replacement_and_busy_races_fail_closed(self):
+        disappeared = run_bash(r"""
+disk_identity() { return 1; }
+assert_same_disk /dev/TEST expected
+""")
+        self.assertNotEqual(disappeared.returncode, 0)
+        self.assertIn("Cannot read identity", disappeared.stderr)
+
+        replaced = run_bash(r"""
+disk_identity() { printf '%s' replacement; }
+assert_disk_idle() { printf 'IDLE_SHOULD_NOT_RUN'; }
+assert_same_disk /dev/TEST expected
+""")
+        self.assertNotEqual(replaced.returncode, 0)
+        self.assertIn("identity changed", replaced.stderr.lower())
+        self.assertNotIn("IDLE_SHOULD_NOT_RUN", replaced.stdout)
+
+        for problem in [
+            "mounted filesystem or active swap",
+            "active swap on /dev/TEST1",
+            "in use by dm-0 (LUKS/LVM/RAID)",
+        ]:
+            with self.subTest(problem=problem):
+                proc = run_bash(f"""
+disk_identity() {{ printf '%s' expected; }}
+disk_problem() {{ printf '%s' {shlex.quote(problem)}; }}
+assert_same_disk /dev/TEST expected
+""")
+                self.assertNotEqual(proc.returncode, 0)
+                self.assertIn(problem, proc.stderr)
+
+    def test_persistent_identity_accepts_either_serial_or_wwn_but_not_neither(self):
+        self.assertEqual(run_bash("persistent_disk_id_present 'SERIAL-ONLY '").returncode, 0)
+        self.assertEqual(run_bash("persistent_disk_id_present ' WWN-ONLY'").returncode, 0)
+        self.assertNotEqual(run_bash("persistent_disk_id_present '   '").returncode, 0)
+        disk_problem = re.search(r"^disk_problem\(\) \{\n.*?^\}", TEXT, re.M | re.S).group(0)
+        self.assertIn("SERIAL,WWN", disk_problem)
+        self.assertIn("missing persistent serial/WWN identity", disk_problem)
+
+    def test_second_installer_uses_nonblocking_exclusive_lock_before_selection(self):
+        preflight = re.search(r"^preflight\(\) \{\n.*?^\}", TEXT, re.M | re.S).group(0)
+        self.assertIn("exec 9>/run/lock/skittles-installer.lock", preflight)
+        self.assertIn("flock -n 9", preflight)
+        self.assertLess(preflight.index("flock -n 9"), preflight.index("select_drives"))
+
+    def test_terminal_escape_bytes_are_removed_from_display_metadata(self):
+        proc = subprocess.run(
+            ["bash", "-c", "printf 'model\\033[31mserial' | tr -cd '[:print:]'"],
+            text=True, capture_output=True, check=True,
+        )
+        self.assertNotIn("\x1b", proc.stdout)
+        scan = re.search(r"^scan_drives\(\) \{\n.*?^\}", TEXT, re.M | re.S).group(0)
+        self.assertIn("tr -cd '[:print:]'", scan)
+
+    def test_cleanup_never_cascades_after_unmount_failure(self):
+        proc = run_bash("""
+warn() { :; }
+rm() { :; }
+umount() { printf 'umount:%s\n' "$1"; return 1; }
+cryptsetup() { printf 'crypt:%s\n' "$*"; }
+OWN_EFI=1 OWN_ROOT=1 OWN_CRYPT=1
+cleanup_owned
+printf 'state:%s%s%s\n' "$OWN_EFI" "$OWN_ROOT" "$OWN_CRYPT"
+""")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("umount:/mnt/boot", proc.stdout)
+        self.assertNotIn("umount:/mnt\n", proc.stdout)
+        self.assertNotIn("crypt:", proc.stdout)
+        self.assertIn("state:111", proc.stdout)
+
+    def test_cleanup_close_failure_keeps_mapping_owned_and_warns(self):
+        proc = run_bash(r"""
+warn() { printf 'WARN:%s\n' "$*"; }
+rm() { :; }
+cryptsetup() { printf 'crypt:%s\n' "$*"; return 1; }
+OWN_EFI=0 OWN_ROOT=0 OWN_CRYPT=1
+cleanup_owned
+printf 'state:%s\n' "$OWN_CRYPT"
+""")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("crypt:close", proc.stdout)
+        self.assertIn("Could not close", proc.stdout)
+        self.assertIn("state:1", proc.stdout)
 
     def test_extra_wipe_cannot_start_before_install_success(self):
         with tempfile.TemporaryDirectory() as td:
@@ -483,7 +719,7 @@ class GeneratedConfigurationTests(unittest.TestCase):
         self.assertNotIn("cpupower --cpu all frequency-set --governor performance", TEXT)
         self.assertIn("desiredgov=performance", heredoc("GAMEMODE"))
         self.assertIn("ioprio=0", heredoc("GAMEMODE"))
-        self.assertIn("disable_splitlock=1", heredoc("GAMEMODE"))
+        self.assertIn("disable_splitlock=0", heredoc("GAMEMODE"))
         self.assertIn("Gaming profile requires the performance governor for GameMode.", TEXT)
         self.assertNotIn("CPU governor: performance.", TEXT)
 

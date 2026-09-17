@@ -36,7 +36,7 @@ python3 scripts/audit_repository.py
 git diff --check
 ```
 
-CI additionally requires the critical documentation/test/release files to exist, preventing an accidentally reduced test tree from producing a misleading green run.
+CI additionally requires the critical documentation/test/release files to exist, preventing an accidentally reduced test tree from producing a misleading green run. The Ubuntu job also extracts the generated chroot and doctor programs and runs Bash syntax plus ShellCheck on them. A separate `archlinux:latest` container job performs a full current-Arch userspace upgrade and executes the real pacman `DownloadUser` preflight (`-Sy`) plus both-profile transaction resolution (`-Sp`) and per-package repository availability checks (`-Si`). A sandbox restriction imposed by the hosted container must be reported as a CI/environment block; production must not add `DisableSandbox*` to work around CI.
 
 ## Reproducible release assets
 

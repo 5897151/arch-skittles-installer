@@ -33,6 +33,23 @@ class GitHubInfrastructureTests(unittest.TestCase):
         self.assertIn("python3 -m unittest discover -s tests -v", text)
         self.assertIn("release-signoff.json", text)
         self.assertIn("scripts/check_release_signoff.py", text)
+        self.assertIn("scripts/extract_generated_shell.py CHROOT_SCRIPT", text)
+        self.assertIn("scripts/extract_generated_shell.py DOCTOR_SCRIPT", text)
+        self.assertIn("shellcheck /tmp/skittles-chroot.sh /tmp/skittles-doctor.sh", text)
+        self.assertIn("archlinux:latest", text)
+        self.assertIn("bash tests/test_arch_pacman_preflight.sh", text)
+        arch_script = (ROOT / "tests/test_arch_pacman_preflight.sh").read_text(encoding="utf-8")
+        self.assertIn("pacman -Syu --noconfirm --needed", arch_script)
+        self.assertIn("-Sy --noconfirm", arch_script)
+        self.assertIn("-Sp --noconfirm", arch_script)
+        self.assertIn("-Si -- \"$package\"", arch_script)
+        self.assertIn("stat -c '%a' \"$WORKDIR\"", arch_script)
+        self.assertIn("copied_user", arch_script)
+        self.assertIn("PACKAGE-PERMISSION LOGIC: NOT PROVEN", arch_script)
+        self.assertIn("PACMAN SANDBOX IN HOSTED CONTAINER: BLOCKED", arch_script)
+        self.assertNotIn("DisableSandbox", text)
+        installer = (ROOT / "skittles-installer.sh").read_text(encoding="utf-8")
+        self.assertNotIn("DisableSandbox", installer)
 
     def test_external_actions_are_first_party_and_sha_pinned(self):
         for path in (CI, RELEASE):

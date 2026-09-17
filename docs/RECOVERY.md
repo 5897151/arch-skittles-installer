@@ -7,7 +7,7 @@ These instructions assume the installed machine does not boot. They are intentio
 
 ## 1. Boot and identify the installed disk safely
 
-Boot a current official Arch installation ISO in UEFI mode. Do **not** run `skittles-installer.sh`; recovery is manual and nondestructive unless you explicitly run a modifying command.
+Boot a current official Arch installation ISO in UEFI mode. Do **not** run `skittles-installer.sh`; recovery is manual and nondestructive unless you explicitly run a modifying command. This recovery flow was re-audited against current `arch-chroot`, mkinitcpio/systemd-initramfs, GRUB, and Arch system-maintenance guidance, but the required physical recovery drill remains `NOT TESTED`.
 
 Inventory storage:
 

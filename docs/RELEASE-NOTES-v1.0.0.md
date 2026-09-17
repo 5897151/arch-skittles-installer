@@ -5,6 +5,10 @@
 
 SKITTLES `v1.0.0` is the first stable release of a hardware-scoped, destructive fresh-install Arch Linux installer for one i7-8700K + RTX 3060 Ti KDE/Wayland desktop. It is designed around explicit disk authorization, LUKS2 encrypted root, Linux + Linux LTS recovery, conservative network/privacy defaults, current Arch NVIDIA open-module handling, and auditable local diagnostics.
 
+## Current RC remediation
+
+A real current official Arch ISO exposed a pre-destructive pacman 7 failure because pacman downloads as its configured `DownloadUser` while SKITTLES had placed custom DB/cache state beneath a root-only `0700` temporary parent. The remediation grants traverse-only access to that random parent, preserves pacman `DownloadUser` and sandboxing, runs package sync/resolution before any disk interaction, and makes pre-write failure reporting explicit. No tagged RC exists yet, so the source version remains `1.0.0-rc.1`.
+
 ## Hardware target
 
 Supported hardware for this release:
@@ -42,7 +46,7 @@ These choices improve privacy but do not provide anonymity. DNS-over-TLS, Tor an
 
 ## Gaming
 
-The gaming profile adds Steam, 32-bit NVIDIA/Vulkan libraries, GameMode, MangoHud and NTSync. GameMode is an on-demand game-session optimization layer with explicit I/O priority and session-scoped split-lock behavior; SKITTLES does not force a permanent maximum-performance governor, CPU/GPU overclock, fixed GPU clocks, alternate gaming kernel, or global mitigation disable.
+The gaming profile adds Steam, 32-bit NVIDIA/Vulkan libraries, GameMode, MangoHud and NTSync. GameMode is an on-demand game-session layer with explicit I/O priority; split-lock mitigation remains enabled (`disable_splitlock=0`). SKITTLES does not force a permanent maximum-performance governor, CPU/GPU overclock, fixed GPU clocks, alternate gaming kernel, or global mitigation disable.
 
 ## Recovery
 

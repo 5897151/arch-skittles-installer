@@ -29,13 +29,13 @@ The important ordering rule is that extra wipe-only disks are not touched until 
 
 ## Preflight
 
-Preflight requires a local interactive root console on a current Arch ISO, x86-64, UEFI variables, writable efivars, Secure Boot disabled, the i7-8700K, an RTX 3060 Ti PCI ID accepted by this release, CPU frequency policy availability, working DNS, synchronized time, and resolvable package sets.
+Preflight requires a local interactive root console on a current Arch ISO, x86-64, UEFI variables, writable efivars, Secure Boot disabled, the i7-8700K, an RTX 3060 Ti PCI ID accepted by this release, CPU frequency policy availability, working DNS, synchronized time, and resolvable package sets. These predictable external prerequisites are proven before disk selection. `--check` exits immediately after package synchronization/resolution and never enumerates or asks the user to select disks.
 
 The installer acquires a process lock so two SKITTLES instances cannot race drive state. `/mnt` must be unused and the `skittles-root` mapper name must not already exist.
 
 ## Destructive authorization model
 
-Drive inventory is recorded as path + kernel major/minor identity + size + model/serial/WWN metadata. A candidate must be a supported whole internal SATA/NVMe disk and must not be read-only, removable, USB, mounted, active swap, or held by LUKS/LVM/RAID.
+Drive inventory is recorded as path + kernel major/minor identity + size + model/serial/WWN metadata. A candidate must be a supported whole internal SATA/NVMe disk, expose at least one persistent SERIAL or WWN identifier, and must not be read-only, removable, USB, mounted, active swap, or held by LUKS/LVM/RAID.
 
 The user selects one target and zero or more extra wipe disks. Each selected disk requires an exact `ERASE /dev/...` string. After all confirmations, SKITTLES computes a SHA-256 digest over release version, wipe mode, profile, discard choice, selected indices, disk identities, and sizes. Every destructive helper checks that approved digest and only accepts a drive present in the confirmed plan.
 
@@ -54,7 +54,7 @@ The ESP is intentionally outside LUKS so UEFI/GRUB can boot it. This means boot 
 
 ## Package installation
 
-The minimal profile installs explicit base, Plasma, networking/audio, NVIDIA, firewall, and zram packages. The gaming profile adds only its explicit Steam/32-bit graphics/GameMode/MangoHud/NTSync list. Package resolution is checked before disk writes using temporary pacman metadata. The selected pacman configuration is then used by `pacstrap`; gaming persists `[multilib]` for later upgrades.
+The minimal profile installs explicit base, Plasma, networking/audio, NVIDIA, firewall, and zram packages. The gaming profile adds only its explicit Steam/32-bit graphics/GameMode/MangoHud/NTSync list. Package resolution is checked before disk selection/writes using temporary pacman metadata. The temporary `/run/skittles.*` parent is mode `0711` so pacman 7's configured low-privilege `DownloadUser` can traverse into pacman's own `db/sync/download-*` directory; DB/cache parents remain root-owned `0755`, the copied pacman configuration retains `DownloadUser` and sandboxing, and cleanup removes the temporary state. The selected pacman configuration is then used by `pacstrap`; gaming persists `[multilib]` for later upgrades.
 
 ## Chroot configuration
 
@@ -76,13 +76,13 @@ Privacy defaults are documented in [PRIVACY.md](PRIVACY.md). They reduce broadca
 
 ## Gaming profile
 
-The gaming profile enables multilib and adds Steam, 32-bit NVIDIA/Vulkan libraries, GameMode, MangoHud, and `ntsync-autoload`. GameMode may request the performance governor, best-effort I/O priority 0, and a session-scoped split-lock mitigation change only for participating games. No persistent performance governor, global split-lock change, GPU overclock, or global overlay injection is configured.
+The gaming profile enables multilib and adds Steam, 32-bit NVIDIA/Vulkan libraries, GameMode, MangoHud, and `ntsync-autoload`. GameMode may request the performance governor and best-effort I/O priority 0 only for participating games, but `disable_splitlock=0` deliberately leaves the kernel split-lock mitigation enabled. No persistent performance governor, global split-lock disable, GPU overclock, or global overlay injection is configured.
 
 ## Failure cleanup
 
 On failure, SKITTLES clears credential variables, removes its temporary helper, and only attempts to unmount or close resources it records as its own. It does not force-unmount unrelated filesystems or globally disable swap. There is no rollback or resume after destructive work begins.
 
-If installation fails before completion, extra wipe-only disks remain untouched. If an extra wipe fails after installation, Arch remains installed but a previously processed extra disk can already be erased and the failing disk can be partly erased.
+Failure reporting is phase-aware. Before the first destructive command starts, an error states that no disk writes occurred. Once target destructive work begins, an error states that the selected installation cannot be rolled back automatically. If an extra wipe fails after the target installation completed, the report states that Arch installed successfully but the extra wipe stage did not finish. Extra wipe-only disks remain untouched until the target install succeeds; a previously processed extra disk can already be erased and the failing disk can be partly erased.
 
 ## Doctor
 

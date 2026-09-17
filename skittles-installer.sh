@@ -15,6 +15,7 @@ DEMO=0
 APPROVED=0
 APPROVED_PLAN_DIGEST=""
 ARCH_INSTALLED=0
+DESTRUCTIVE_WRITES_STARTED=0
 PROFILE=""
 LIST_PACKAGES=0
 TARGET_INDEX=-1
@@ -175,6 +176,19 @@ prepare_pacman_config() {
     fi
 }
 
+prepare_preflight_pacman_workspace() {
+    WORKDIR=$(mktemp -d /run/skittles.XXXXXXXX)
+    # pacman 7.x may download as DownloadUser (Arch currently configures alpm).
+    # mktemp creates the parent as 0700, which blocks that user from traversing
+    # into pacman's own db/sync/download-* directory. Grant traverse only: no
+    # directory listing or parent writes, no recursive chown, and no sandbox
+    # disable. pacman itself owns/manages the per-download temporary directory.
+    chmod 0711 "$WORKDIR"
+    mkdir -p "$WORKDIR/db/local" "$WORKDIR/cache"
+    chmod 0755 "$WORKDIR/db" "$WORKDIR/db/local" "$WORKDIR/cache"
+    prepare_pacman_config /etc/pacman.conf "$WORKDIR/pacman.conf"
+}
+
 valid_username() {
     [[ $1 =~ ^[a-z_][a-z0-9_-]*$ && $1 != root && ${#1} -le 32 ]]
 }
@@ -198,6 +212,10 @@ secret() {
 
 disk_identity() {
     lsblk --bytes --nodeps --noheadings --output MAJ:MIN,SIZE,MODEL,SERIAL,WWN "${1:-$DISK}"
+}
+
+persistent_disk_id_present() {
+    [[ $1 =~ [^[:space:]] ]]
 }
 
 set_target() {
@@ -227,7 +245,7 @@ validate_disk_attributes() {
 }
 
 disk_problem() {
-    local disk=$1 nodes mounts node holder swap_devices type readonly_flag removable transport problem
+    local disk=$1 nodes mounts node holder swap_devices type readonly_flag removable transport persistent_id problem
     [[ -b $disk ]] || { printf 'device missing'; return; }
     [[ $disk =~ ^/dev/(sd[a-z]+|nvme[0-9]+n[0-9]+)$ ]] ||
         { printf 'unsupported device (only internal SATA/SCSI-style sdX or NVMe disks are eligible)'; return; }
@@ -236,9 +254,11 @@ disk_problem() {
     readonly_flag=$(blockdev --getro "$disk") || { printf 'cannot read disk flags'; return; }
     removable=$(lsblk -dnro RM "$disk") || { printf 'cannot read removable flag'; return; }
     transport=$(lsblk -dnro TRAN "$disk") || { printf 'cannot read transport'; return; }
+    persistent_id=$(lsblk -dnro SERIAL,WWN "$disk") || { printf 'cannot read persistent identity'; return; }
     mounts=$(lsblk -nrpo MOUNTPOINTS "$disk") || { printf 'cannot read mount state'; return; }
     problem=$(disk_attribute_problem "$type" "$readonly_flag" "$removable" "$transport" "$mounts")
     [[ -z $problem ]] || { printf '%s' "$problem"; return; }
+    persistent_disk_id_present "$persistent_id" || { printf 'missing persistent serial/WWN identity'; return; }
     nodes=$(lsblk -nrpo NAME "$disk") || { printf 'cannot read descendants'; return; }
     [[ -n $nodes ]] || { printf 'empty device inventory'; return; }
     swap_devices=$(swapon --noheadings --raw --show=NAME) || { printf 'cannot read swap state'; return; }
@@ -455,6 +475,20 @@ cleanup_owned() {
     return 0
 }
 
+report_failure() {
+    local rc=$1
+    warn "Installation stopped (exit $rc). No automatic reboot. Review the last error."
+    if (( ARCH_INSTALLED )); then
+        warn 'Arch installed successfully, but the extra-drive wipe stage did not finish.'
+        warn 'Inspect any selected extra drives before retrying an erase operation.'
+    elif (( DESTRUCTIVE_WRITES_STARTED )); then
+        warn 'Installation stopped after destructive disk operations began.'
+        warn 'The selected installation cannot be rolled back automatically. Rerunning starts a NEW installation.'
+    else
+        warn 'Installation stopped before any disk writes. Your disks were not modified.'
+    fi
+}
+
 on_exit() {
     local rc=$?
     trap - EXIT ERR
@@ -462,11 +496,7 @@ on_exit() {
     unset USER_PASSWORD ROOT_PASSWORD LUKS_PASSWORD
     cleanup_owned
     if [[ -n $WORKDIR ]]; then rm -rf -- "$WORKDIR"; fi
-    if (( rc != 0 )); then
-        if (( ARCH_INSTALLED )); then warn 'Arch is installed, but the extra-drive wipe stage did not finish.'; fi
-        warn "Installation stopped (exit $rc). No automatic reboot. Review the last error."
-        warn "A started wipe/install cannot be rolled back. Rerunning starts a NEW installation."
-    fi
+    if (( rc != 0 )); then report_failure "$rc"; fi
     exit "$rc"
 }
 
@@ -489,7 +519,8 @@ preflight() {
     exec 9>/run/lock/skittles-installer.lock
     flock -n 9 || die 'Another Skittles installer is already running.'
     assert_install_workspace
-    select_drives
+    # Prove predictable external prerequisites before asking the user to spend
+    # time selecting disks or entering credentials/erase confirmations.
     choose_profile
     secure_boot=/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c
     [[ -r $secure_boot ]] || die "Cannot verify Secure Boot state. Check firmware/efivarfs."
@@ -527,9 +558,7 @@ preflight() {
     done
     [[ $sync_state == yes ]] || die "Clock has not synchronized. Fix ISO networking/time before installing."
 
-    WORKDIR=$(mktemp -d /run/skittles.XXXXXXXX)
-    mkdir -p "$WORKDIR/db/local" "$WORKDIR/cache"
-    prepare_pacman_config /etc/pacman.conf "$WORKDIR/pacman.conf"
+    prepare_preflight_pacman_workspace
     log "Checking repositories and resolving ALL packages before the wipe..."
     # Temporary sync databases only; never partial-upgrade or resize the live ISO.
     pacman --config "$WORKDIR/pacman.conf" --dbpath "$WORKDIR/db" \
@@ -537,6 +566,10 @@ preflight() {
     pacman --config "$WORKDIR/pacman.conf" --dbpath "$WORKDIR/db" \
         --cachedir "$WORKDIR/cache" -Sp --noconfirm --print-format '%n' -- "${PACKAGES[@]}" > "$WORKDIR/packages.txt"
     log "Preflight passed. Package downloads can still fail if mirrors/network change."
+    # --check is a storage-independent release gate: prove external prerequisites
+    # and package resolution without enumerating or asking the user to select disks.
+    (( CHECK_ONLY )) && return 0
+    select_drives
 }
 
 collect_credentials() {
@@ -586,9 +619,11 @@ clear_disk() {
     if [[ $WIPE_MODE == zero ]]; then
         log "Overwriting $DISK ($DISK_SIZE_BYTES bytes)..."
         # Exact byte count avoids both a short tail and an expected ENOSPC error.
+        DESTRUCTIVE_WRITES_STARTED=1
         dd if=/dev/zero of="$DISK" bs=16M iflag=count_bytes count="$DISK_SIZE_BYTES" conv=fsync status=progress
     else
         nodes=$(lsblk -nrpo NAME "$DISK")
+        DESTRUCTIVE_WRITES_STARTED=1
         while IFS= read -r node; do
             [[ $node == "$DISK" ]] && continue
             wipefs --all "$node"
@@ -799,7 +834,7 @@ renice=0
 softrealtime=off
 inhibit_screensaver=1
 ioprio=0
-disable_splitlock=1
+disable_splitlock=0
 GAMEMODE
 fi
 
@@ -1161,7 +1196,7 @@ if pacman -Q steam >/dev/null 2>&1; then
     check 'gaming tools' pacman -Q gamemode lib32-gamemode mangohud lib32-mangohud ntsync-autoload
     check_line 'GameMode performance governor explicit' /etc/gamemode.ini 'desiredgov=performance'
     check_line 'GameMode I/O priority explicit' /etc/gamemode.ini 'ioprio=0'
-    check_line 'GameMode split-lock change is session scoped' /etc/gamemode.ini 'disable_splitlock=1'
+    check_line 'GameMode keeps split-lock mitigation enabled' /etc/gamemode.ini 'disable_splitlock=0'
     check 'GameMode group exists' getent group gamemode
     if (( EUID == 0 )); then
         gamemode_members=$(getent group gamemode | cut -d: -f4)

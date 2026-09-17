@@ -2,42 +2,32 @@
 
 ## NOT READY FOR v1.0.0
 
-Source version remains `1.0.0-rc.1`. Automated/static validation is green and the project license is resolved as Apache-2.0. Stable promotion is still blocked by physical target validation, recovery execution, performance measurements, and verification of a real tagged RC artifact/provenance.
+Source version remains `1.0.0-rc.1`. No public RC tag or release exists, so the current P0 preflight repair does not require an RC-number increment yet. Do not create a tag until the repaired public SHA has green Ubuntu CI, green current-Arch pacman integration, and the official-ISO `--check --profile=gaming` regression succeeds.
 
-## Exact hosted automated baseline
+## Verified public baseline
 
-GitHub Actions run `35175926302` tested public `main` commit `8b3632938aaff6d6721a064b36b12b78b0ed0fbb` on Ubuntu 24.04.
+Before this remediation, public `main` was `5b5453bcbc9d6e6ca175adf5c9fa737f050971a1` with installer blob `09ec6f7c310c77e3dd800b9f59c85aeea13ea7cc`. Hosted CI for that baseline passed repository completeness, Bash syntax, ShellCheck 0.9.0, **74/74 Python tests**, repository hygiene, and whitespace.
 
-| Check | Result |
-| --- | --- |
-| Repository completeness | PASS |
-| Bash syntax | PASS |
-| ShellCheck | PASS, 0.9.0 |
-| Python discovery | PASS, 68/68 tests |
-| Repository hygiene | PASS, 32 tracked files scanned |
-| Whitespace | PASS |
-| CI token permissions | `contents: read`, `metadata: read` |
+A real current official Arch ISO then exposed a release-blocking preflight defect: pacman 7 downloaded as its configured low-privilege `DownloadUser` (`alpm` in current Arch packaging), but SKITTLES placed custom DB/cache state under a root-only `0700` `mktemp` parent. Pacman could not traverse into its own `db/sync/download-*` directory and failed opening `core.db.part` before any disk writes.
 
-The automated suite covers CLI/profile behavior, generated configuration, destructive-operation mocks, disk-plan/identity guards, credential transport, resolver handoff, release prerequisites, deterministic release assets, fail-closed stable sign-off, repository hygiene, recovery guidance, and documentation consistency.
+## Current remediation candidate
 
-## License decision
+The remediation keeps pacman's normal downloader privilege separation and sandboxing. The random `/run/skittles.*` parent is `0711` (traverse only), while `db`, `db/local`, and `cache` remain root-owned `0755`. Pacman itself creates/owns its per-download directory. No recursive `chown`, `DisableSandbox*`, or live-ISO pacman configuration mutation is used.
 
-Apache License 2.0 is selected and the canonical `LICENSE` is part of the source tree. It preserves permissive reuse and commercial/fork freedom while adding an explicit contributor patent grant and defined notice/modification obligations. This resolves the former license blocker only; it does not affect physical release gates.
+Predictable external checks and package synchronization/resolution now complete before disk selection. `--check` exits immediately afterward, before disk enumeration, credentials, or erase confirmation. Failure reporting distinguishes pre-write failure, destructive work already started, and target-installed/extra-wipe failure. Destructive candidates now fail closed when both serial and WWN are absent. GameMode keeps kernel split-lock mitigation enabled (`disable_splitlock=0`).
 
-## Installer integrity
+Local Python discovery is **90/90 PASS**. The generated chroot and doctor programs are extracted for independent Bash/ShellCheck validation in CI. A separate current-Arch job runs the actual pacman `-Sy` operation plus minimal/gaming `-Sp` transaction resolution plus per-package `-Si` availability checks with `DownloadUser` and sandboxing intact.
 
-This public-facing polish pass does not modify `skittles-installer.sh`. The installer blob remains `0532da3e6c8733bf0b88afe861ba3469acd75af0`, the same installer bytes that passed hosted ShellCheck and the 68-test baseline.
+## Gates still required before the first tagged RC
 
-## Hardware, recovery, and performance gates
+- Publish the remediation commit and obtain exact-SHA green Ubuntu hosted CI, including ShellCheck on the installer and both generated shell programs.
+- Obtain exact-SHA green current-Arch integration or clearly establish a hosted-container sandbox block without changing production security.
+- On the real current official Arch ISO, run `bash skittles-installer.sh --check --profile=gaming` and prove repository synchronization/package resolution succeeds without disk interaction.
 
-Every mandatory entry in `release-signoff.json` remains `NOT TESTED`. Required physical evidence includes clean install, repeated LUKS unlock, cold/warm boots, both kernels, Plasma Wayland, NVIDIA/Vulkan, network/DNS/firewall, audio/USB, repeated suspend/resume, gaming stack, full update, post-update boots, doctor checks, complete Arch-ISO recovery, and performance measurements.
+After those software/preflight gates pass, an actual `v1.0.0-rc.1` tag may be considered because no earlier RC tag/release exists.
 
-The stable release gate requires every mandatory key to equal `PASS`, requires `docs/PERFORMANCE.md` to match its recorded SHA-256 evidence, and requires stable release notes to have no `DRAFT:` marker. Missing, renamed, malformed, empty, `FAIL`, `BLOCKED`, `WARN`, or `NOT TESTED` sign-off data fails closed.
+## Stable gates remain unchanged
 
-## Release artifact gate
+Every mandatory entry in `release-signoff.json` remains `NOT TESTED`. Stable promotion still requires physical clean install, repeated LUKS unlock, both kernels, Plasma Wayland, NVIDIA/Vulkan, networking/firewall/audio/USB, suspend/resume, gaming stack, full update and post-update boots, doctor checks, complete Arch-ISO recovery, performance measurements, and real release artifact/checksum/provenance verification.
 
-No stable `v1.0.0` release may be created by this documentation/license pass. A real RC must be built by the GitHub release workflow, downloaded independently, checked with `sha256sum -c SHA256SUMS`, and verified with `gh attestation verify` against `5897151/arch-skittles-installer/.github/workflows/release.yml`. Only those downloaded RC bytes qualify for physical validation.
-
-## Promotion rule
-
-Do not promote to `v1.0.0` until the final public source SHA has green hosted CI, every mandatory machine-readable sign-off is PASS, performance evidence is recorded and SHA-bound, the recovery procedure has actually been executed, stable notes are no longer draft, and the real tagged assets/checksums/provenance have been verified.
+The stable release gate remains fail-closed. Missing, renamed, malformed, empty, `FAIL`, `BLOCKED`, `WARN`, or `NOT TESTED` data blocks `v1.0.0`.

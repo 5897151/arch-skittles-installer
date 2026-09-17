@@ -6,6 +6,11 @@ SKITTLES follows Semantic Versioning. This changelog is structured after Keep a 
 
 ### Fixed (local regression coverage; hardware validation pending)
 
+- Fix current pacman 7 preflight on the official Arch ISO: the root-created `/run/skittles.*` workspace now grants traverse-only access (`0711`) so pacman's configured `DownloadUser` can reach the download directory that pacman itself creates/owns, without recursively changing ownership or disabling the downloader sandbox.
+- Move package synchronization/resolution before disk selection and make `--check` exit before any disk enumeration, credentials, or erase confirmation.
+- Track whether destructive writes have actually started so preflight failures no longer claim a wipe/install is irreversible; post-write and post-install-extra-wipe failures report distinct states.
+- Reject destructive target candidates that expose neither a persistent serial nor WWN, strengthening replacement detection while accepting either identifier independently.
+- Keep split-lock mitigation enabled in the GameMode profile (`disable_splitlock=0`); no target-hardware benchmark justifies trading that mitigation away.
 - Establish the installed resolver symlink after `arch-chroot` releases its temporary resolver bind mount, preserving live DNS throughout configuration.
 - Recheck target identity and idle state between completion of the wipe and partition creation.
 - Report failed-service query errors as failures instead of an empty successful result; skip the graphical-session check from a text console.
@@ -19,8 +24,9 @@ SKITTLES follows Semantic Versioning. This changelog is structured after Keep a 
 
 - Replaced weak stable-release marker greps with a fail-closed machine-readable sign-off validator: every mandatory physical/recovery/performance key must be present and `PASS`, performance evidence is SHA-256-bound, and draft stable notes are rejected.
 - Added executable negative release-gate fixtures, tag/license prerequisite tests, byte-reproducible release-asset testing, and a current-tree repository hygiene guard.
-- Expanded adversarial disk-plan/input regression coverage without changing installer behavior.
+- Expanded adversarial disk-plan/input regression coverage, including disappearing/replaced/busy disks, signal-phase reporting, persistent identifiers, cleanup failures, and second-instance locking.
 - Updated recovery resolver guidance to rely on current `arch-chroot` resolver/API-filesystem handling instead of a manual `/mnt/run` copy workaround.
+- Added generated chroot/doctor Bash+ShellCheck validation and a separate current-Arch pacman integration job that executes real `-Sy` and both-profile `-Sp` resolution with `DownloadUser`/sandboxing intact.
 - Expanded read-only CPU, clocksource, zram/zswap, storage, NVIDIA, Vulkan, GameMode, and NTSync diagnostics plus the physical A/B experiment matrix.
 
 ### Licensing

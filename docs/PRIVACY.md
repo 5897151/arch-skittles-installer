@@ -49,3 +49,7 @@ resolvectl status
 ```
 
 Then run `skittles-doctor` / `sudo skittles-doctor` and treat expected failures as documentation that you intentionally diverged from the SKITTLES baseline.
+
+## Installer preflight data
+
+Package preflight copies the live ISO pacman configuration into a random `/run/skittles.*` workspace and stores temporary sync databases/cache there. The workspace exists only for the installer process and is removed by cleanup. It does not disable pacman signature verification, change the live ISO's permanent pacman configuration, or add a telemetry channel. Repository requests still reveal ordinary package-manager network metadata to the selected Arch mirrors/network path.

@@ -2,7 +2,7 @@
 
 Automated validation is necessary but cannot substitute for the physical i7-8700K + RTX 3060 Ti release test. All destructive automated tests use mocks or ordinary temporary files; they must never target real block devices.
 
-## Automated gate
+## Automated gates
 
 From the repository root:
 
@@ -11,30 +11,58 @@ bash -n skittles-installer.sh
 shellcheck skittles-installer.sh
 python3 -m unittest discover -s tests -v
 python3 scripts/audit_repository.py
+python3 -m json.tool release-signoff.json >/dev/null
 git diff --check
 ```
 
-GitHub run `35175926302` on commit `8b3632938aaff6d6721a064b36b12b78b0ed0fbb` is the current public automated baseline: repository completeness PASS, Bash PASS, ShellCheck 0.9.0 PASS, **68/68 Python PASS**, repository hygiene PASS, and whitespace PASS.
+The exact public baseline before the current-Arch remediation is commit `5b5453bcbc9d6e6ca175adf5c9fa737f050971a1`: hosted repository completeness PASS, Bash PASS, ShellCheck 0.9.0 PASS, **74/74 Python PASS**, repository hygiene PASS, and whitespace PASS.
 
-The suite includes release-gate, reproducibility, hygiene, recovery-documentation, resolver, destructive-path, identity-binding, credential-transport, doctor, generated-configuration, metadata, and adversarial-input coverage. Automated success is not copied into physical sign-off fields.
+The current remediation tree expands local Python discovery to **90/90 PASS**. It additionally:
+
+- extracts `CHROOT_SCRIPT` and `DOCTOR_SCRIPT` with `scripts/extract_generated_shell.py`, then runs `bash -n` and ShellCheck against them in Ubuntu CI;
+- tests pre-write/post-write/post-install failure reporting, SIGINT/SIGTERM states, persistent disk identity, disappearing/replaced/busy disks, cleanup failures and second-instance locking;
+- runs `tests/test_arch_pacman_preflight.sh` in a separate `archlinux:latest` container; the integration script first performs a full `pacman -Syu` while installing current Arch `python` and `shellcheck`;
+- executes the real pacman 7 `DownloadUser` database synchronization with the SKITTLES temporary `DBPath`/`CacheDir` and intact downloader sandbox;
+- resolves every explicit package in both minimal and gaming profiles with `pacman -Sp`.
+- runs current Arch `shellcheck` against the installer, Arch integration script, extracted chroot script, and extracted doctor script in addition to Ubuntu CI's ShellCheck.
+
+Do not call the current-Arch integration PASS until the hosted Arch job on the published remediation SHA succeeds. If the runner blocks pacman's Landlock/seccomp sandbox, record `PACMAN SANDBOX IN HOSTED CONTAINER: BLOCKED`; do not weaken the production pacman configuration to make CI green.
+
+## Current official-ISO P0 regression
+
+The next human test is intentionally storage-independent:
+
+```bash
+bash skittles-installer.sh --check --profile=gaming
+```
+
+Run it on the same current official Arch ISO class that reproduced the original `core.db.part: Permission denied` failure. A passing result must:
+
+1. retain the live ISO's active pacman `DownloadUser` and sandbox settings;
+2. synchronize official repository databases successfully;
+3. resolve every gaming-profile package successfully;
+4. exit before disk enumeration/selection, password entry, or erase confirmation;
+5. report a preflight failure as occurring before disk writes if any external prerequisite fails.
+
+Only after this command passes should another destructive installation be attempted.
 
 ## One physical validation sequence
 
 Use the actual RC downloaded from GitHub after checksum and attestation verification. Record the RC tag, `SOURCE_COMMIT`, Arch ISO date, motherboard/firmware version, disk model without serial number, monitor arrangement, and network type.
 
 1. Verify the current official Arch ISO and boot it in UEFI mode with Secure Boot disabled.
-2. Run the RC installer with `--check`; confirm package resolution, target hardware detection, DNS/time, and that no disks are written.
-3. Review disk inventory and exact destructive plan. Confirm only the intended unused internal target is selected.
+2. Run `bash skittles-installer.sh --check --profile=gaming`; confirm package synchronization/resolution completes and exits before storage interaction.
+3. Review disk inventory and exact destructive plan during the real installer. Confirm only intended unused internal disks with a persistent serial or WWN are selectable.
 4. Perform a clean install and verify repeated LUKS unlock, cold boot, and warm reboot.
 5. Boot `linux`; verify Plasma Wayland, `nvidia-smi`, `vulkaninfo --summary`, audio, representative USB, Ethernet, Wi-Fi if applicable, DNS through `systemd-resolved`, IPv6 when available, and nftables.
 6. Run `skittles-doctor` as the normal user and with `sudo`.
 7. Perform multiple suspend/resume cycles; after each, verify NVIDIA/Wayland responsiveness and inspect warning/error logs.
-8. Boot `linux-lts` and repeat the kernel-dependent NVIDIA/Vulkan/network/firewall/doctor/suspend checks.
-9. For the gaming profile, run `gamemoded -t`, then test Steam login manually, a representative Proton title, `gamemoderun`, MangoHud, 32-bit NVIDIA/Vulkan, and NTSync behavior. Confirm the normal CPU and split-lock policies return after the GameMode session ends.
+8. Boot `linux-lts` and repeat kernel-dependent NVIDIA/Vulkan/network/firewall/doctor/suspend checks.
+9. For gaming, run `gamemoded -t`, then test Steam login manually, a representative Proton title, `gamemoderun`, MangoHud, 32-bit NVIDIA/Vulkan, and NTSync. Confirm normal CPU policy returns and split-lock mitigation remains enabled after GameMode use.
 10. Run a normal `pacman -Syu`; if kernel/NVIDIA/initramfs/GRUB components update, complete the update and reboot. Re-verify both kernels and NVIDIA/Wayland.
-11. Boot a current Arch ISO and execute `docs/RECOVERY.md` as written: unlock/mount/chroot, kernel/NVIDIA reinstall where appropriate, initramfs rebuild, GRUB repair/configuration, log inspection, clean exit/unmount, mapping close, and a Linux LTS recovery boot.
-12. Validate Plasma Adaptive Sync/VRR against the actual display when supported; the installer does not change this setting automatically.
-13. Complete every applicable A/B case and the repeated performance procedure in `docs/PERFORMANCE.md`. Keep dm-crypt workqueue bypass, NVIDIA PAT, ReBAR, zram VM candidates, Gamescope, and clocksource alternatives experimental until their own controlled results exist.
+11. Boot a current Arch ISO and execute `docs/RECOVERY.md` as written: unlock/mount/chroot, package/kernel/NVIDIA repair where appropriate, initramfs rebuild, GRUB repair/configuration, log inspection, clean teardown, and a Linux LTS recovery boot.
+12. Validate Plasma Adaptive Sync/VRR against the actual display when supported; the installer does not force this setting.
+13. Complete every applicable A/B case and repeated measurement procedure in `docs/PERFORMANCE.md`.
 
 Do not rerun the installer to test updates or recovery.
 
@@ -79,8 +107,8 @@ When performance testing is complete, set `performance_measurements` to `PASS` a
 sha256sum docs/PERFORMANCE.md
 ```
 
-If the performance document changes afterward, the stable gate fails until the evidence hash is deliberately updated after review.
+If that document changes afterward, stable gating fails until the evidence hash is deliberately updated after review.
 
 ## Current physical status
 
-All mandatory `release-signoff.json` entries are currently `NOT TESTED`. The Apache-2.0 license decision and green automated CI do not change those physical statuses.
+All mandatory `release-signoff.json` entries remain `NOT TESTED`. Automated or container validation never changes those physical statuses.

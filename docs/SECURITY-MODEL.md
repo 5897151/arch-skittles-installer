@@ -47,7 +47,7 @@ A logical zero overwrite covers the host-addressable block range but cannot guar
 
 ## Destructive-operation trust boundary
 
-The installer treats block-device metadata as untrusted display data and never uses model/serial strings as shell code. Destructive helpers must receive an approved plan, a matching path/identity/size tuple, and an idle disk. The plan digest makes silent post-confirmation changes fail closed.
+The installer treats block-device metadata as untrusted display data and never uses model/serial strings as shell code. Eligible destructive targets must expose at least one persistent SERIAL or WWN identifier; a disk with neither is refused. Destructive helpers must receive an approved plan, a matching path/identity/size tuple, and an idle disk. The plan digest makes silent post-confirmation changes fail closed, and identity/idle checks are repeated at destructive transitions.
 
 These controls reduce accidental or simple state-change risk; they are not a formal proof against a hostile kernel, root process, compromised `lsblk`/udev stack, or malicious firmware that lies about storage identity.
 

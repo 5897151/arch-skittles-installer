@@ -30,7 +30,8 @@ jobs:
             docs/ARCHITECTURE.md docs/GITHUB-METADATA.md docs/PRIVACY.md docs/RECOVERY.md \
             docs/RELEASE-AUDIT.md docs/SECURITY-MODEL.md docs/LICENSE-OPTIONS.md docs/PERFORMANCE.md \
             docs/RELEASE-DECISION.md docs/RELEASE-NOTES-v1.0.0-rc.1.md docs/RELEASE-NOTES-v1.0.0.md \
-            docs/RELEASE.md docs/TESTING.md release-signoff.json scripts/check_release_signoff.py scripts/audit_repository.py; do
+            docs/RELEASE.md docs/TESTING.md release-signoff.json scripts/check_release_signoff.py scripts/audit_repository.py \
+            scripts/extract_generated_shell.py tests/test_arch_pacman_preflight.sh; do
             test -s "$file" || { echo "Required source file missing or empty: $file" >&2; exit 1; }
           done
 
@@ -40,6 +41,16 @@ jobs:
       - name: ShellCheck
         run: shellcheck skittles-installer.sh
 
+      - name: Extract and statically validate generated shell programs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/extract_generated_shell.py CHROOT_SCRIPT > /tmp/skittles-chroot.sh
+          python3 scripts/extract_generated_shell.py DOCTOR_SCRIPT > /tmp/skittles-doctor.sh
+          bash -n /tmp/skittles-chroot.sh
+          bash -n /tmp/skittles-doctor.sh
+          shellcheck /tmp/skittles-chroot.sh /tmp/skittles-doctor.sh
+
       - name: Unit and generated-config tests
         run: python3 -m unittest discover -s tests -v
 
@@ -48,3 +59,34 @@ jobs:
 
       - name: Whitespace sanity
         run: git diff --check
+
+  arch-pacman:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: Current Arch container sanity
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          pacman --version
+          bash -n skittles-installer.sh tests/test_arch_pacman_preflight.sh
+
+      - name: Real pacman DownloadUser preflight and package resolution
+        shell: bash
+        run: bash tests/test_arch_pacman_preflight.sh
+
+      - name: Current Arch ShellCheck including generated programs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          shellcheck --version
+          python3 scripts/extract_generated_shell.py CHROOT_SCRIPT > /tmp/skittles-chroot.sh
+          python3 scripts/extract_generated_shell.py DOCTOR_SCRIPT > /tmp/skittles-doctor.sh
+          shellcheck skittles-installer.sh tests/test_arch_pacman_preflight.sh /tmp/skittles-chroot.sh /tmp/skittles-doctor.sh

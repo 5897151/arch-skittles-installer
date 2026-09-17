@@ -6,12 +6,13 @@
 
 | Release gate | Current status |
 | --- | --- |
-| **AUTOMATED VALIDATION** | **PASS** |
-| **HOSTED TEST SUITE** | **68/68 PASS** |
+| **PUBLIC HOSTED BASELINE** | **PASS — 74/74** on `5b5453bcbc9d6e6ca175adf5c9fa737f050971a1` |
+| **CURRENT REMEDIATION LOCAL SUITE** | **90/90 PASS** |
+| **CURRENT-ARCH PACMAN INTEGRATION** | **REQUIRED BY CI; hosted result pending publication** |
 | **PHYSICAL RELEASE-HARDWARE VALIDATION** | **PENDING / NOT TESTED** |
 | **STABLE v1.0.0** | **NOT YET RELEASED** |
 
-Current source version: **`1.0.0-rc.1`** — release candidate, not stable. Automated CI is green, but the release candidate still needs physical i7-8700K + RTX 3060 Ti installation, runtime, update, recovery, and performance validation before stable promotion.
+Current source version: **`1.0.0-rc.1`** — release candidate, not stable. Public baseline CI is green. A real current Arch ISO exposed a pre-destructive pacman 7 `DownloadUser` permission defect; the current remediation fixes that path and adds a real Arch pacman CI job, but the corrected ISO preflight still must be re-run before another destructive installation.
 
 > [!WARNING]
 > **SKITTLES is destructive. Selected disks are erased.** It is a fresh-install tool—not an updater, repair utility, migration tool, or generic Arch installer. Never rerun it to update or repair an installed system.
@@ -72,7 +73,7 @@ Destructive controls include:
 
 - no preselected target;
 - mounted, read-only, removable, USB, active-swap, and LUKS/LVM/RAID-in-use disks are protected;
-- every selected disk requires its own exact **`ERASE /dev/...`** confirmation;
+- every selected disk must expose a persistent serial or WWN and requires its own exact **`ERASE /dev/...`** confirmation;
 - all confirmations finish before the first destructive write;
 - the confirmed plan is SHA-256-bound to the selected paths, identities, sizes, wipe mode, profile, and related choices;
 - device identity and idle state are revalidated before destructive writes and again at critical target transitions;
@@ -110,7 +111,7 @@ Encryption also does not provide boot integrity: GRUB, kernels, and initramfs on
 
 SKITTLES does not disable CPU vulnerability mitigations, overclock CPU/GPU hardware, force permanent maximum clocks, install a special gaming kernel, or claim unmeasured FPS/latency gains.
 
-Normal desktop use leaves CPU policy adaptive. The gaming profile lets GameMode request the `performance` governor only for participating game sessions and restore the original policy afterward. Zram is bounded at half RAM up to 4 GiB; ext4 keeps normal relatime behavior.
+Normal desktop use leaves CPU policy adaptive. The gaming profile lets GameMode request the `performance` governor only for participating game sessions and restore the original policy afterward. GameMode is explicitly configured **not** to disable the kernel split-lock mitigation. Zram is bounded at half RAM up to 4 GiB; ext4 keeps normal relatime behavior.
 
 Performance claims remain blocked until the documented target-hardware measurements are completed. See [Performance validation](docs/PERFORMANCE.md).
 
@@ -135,7 +136,15 @@ Run the non-destructive preflight from the official Arch ISO on supported hardwa
 bash skittles-installer.sh --check
 ```
 
-`--check` performs drive inventory/selection, hardware and firmware checks, DNS/time checks, and package resolution using temporary package metadata. It does not collect credentials, request erase confirmations, partition, format, mount the target, or install Arch.
+`--check` is storage-independent: it performs environment/hardware/firmware checks, DNS/time validation, a real pacman database synchronization, and complete package resolution using temporary package metadata, then exits **before enumerating or selecting disks**. It does not collect credentials, request erase confirmations, partition, format, mount the target, or install Arch.
+
+For the next official-ISO regression check, use the gaming profile that originally exposed the failure:
+
+```bash
+bash skittles-installer.sh --check --profile=gaming
+```
+
+A successful run must synchronize repositories and resolve every gaming-profile package without `core.db.part` permission errors and without any disk writes.
 
 ## Installation
 
@@ -144,8 +153,8 @@ bash skittles-installer.sh --check
 3. Transfer a reviewed SKITTLES source tree or verified GitHub release asset. **Do not use `curl ... | bash`.**
 4. For a published RC, verify `SHA256SUMS` and GitHub artifact provenance as documented in [Release process](docs/RELEASE.md).
 5. Review `skittles-installer.sh`, especially drive selection, `clear_disk`, partitioning, encryption, and chroot configuration.
-6. Run `bash skittles-installer.sh --check` and inspect the complete inventory.
-7. Run `bash skittles-installer.sh`, choose a profile and disks, enter credentials, and type every exact erase confirmation.
+6. Run `bash skittles-installer.sh --check --profile=gaming`; it must finish package synchronization/resolution before any disk interaction.
+7. Only after that preflight passes, run `bash skittles-installer.sh`, choose a profile and disks, enter credentials, and type every exact erase confirmation.
 8. After installation completes, remove the ISO and reboot manually.
 
 ## Command-line options
@@ -192,16 +201,11 @@ Read [Arch Linux news](https://archlinux.org/news/) before upgrades. Never use S
 
 ## Automated validation versus release validation
 
-The public `main` baseline has passed GitHub Actions with:
+The exact public baseline `5b5453bcbc9d6e6ca175adf5c9fa737f050971a1` passed hosted CI with repository completeness, Bash syntax, ShellCheck **0.9.0**, **74/74 Python tests**, repository hygiene, and whitespace validation.
 
-- complete required repository tree;
-- Bash syntax;
-- ShellCheck **0.9.0**;
-- **68/68 Python tests**;
-- repository hygiene scanning;
-- whitespace validation.
+The current remediation tree expands local Python coverage to **90/90 PASS**, adds Bash/ShellCheck validation of the generated chroot/doctor programs, and adds a separate current-Arch container job that executes the real pacman `DownloadUser` preflight plus minimal and gaming `-Sp` transaction resolution plus per-package `-Si` availability checks. That Arch-specific job is not claimed PASS until it runs on the published remediation SHA.
 
-The suite covers CLI/profile behavior, generated configuration, destructive-operation mocks, plan/identity guards, credential transport, release prerequisites, fail-closed stable gating, deterministic release assets, repository hygiene, documentation consistency, and recovery guidance.
+The suite covers CLI/profile behavior, generated configuration, destructive-operation mocks, plan/identity guards, signal/failure-phase behavior, credential transport, release prerequisites, fail-closed stable gating, deterministic release assets, repository hygiene, documentation consistency, and recovery guidance.
 
 That is **automated evidence only**. `release-signoff.json` intentionally remains `NOT TESTED` for the physical i7-8700K + RTX 3060 Ti gates. See [Testing and release sign-off](docs/TESTING.md) and [Release decision](docs/RELEASE-DECISION.md).
 

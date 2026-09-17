@@ -6,6 +6,10 @@ This is a **release candidate**, not the stable `v1.0.0` release. Real-hardware 
 
 SKITTLES is a destructive fresh-install Arch Linux installer scoped to one i7-8700K + RTX 3060 Ti KDE/Wayland desktop. This RC focuses on explicit destructive authorization, LUKS2 encrypted root, two-kernel recovery, conservative privacy/security defaults, current Arch NVIDIA handling, and a local read-only health check.
 
+## Current RC remediation
+
+A real current official Arch ISO exposed a pre-destructive pacman 7 failure because pacman downloads as its configured `DownloadUser` while SKITTLES had placed custom DB/cache state beneath a root-only `0700` temporary parent. The remediation grants traverse-only access to that random parent, preserves pacman `DownloadUser` and sandboxing, runs package sync/resolution before any disk interaction, and makes pre-write failure reporting explicit. No tagged RC exists yet, so the source version remains `1.0.0-rc.1`.
+
 ## Hardware target
 
 Supported for release testing only on:
@@ -42,7 +46,7 @@ Other hardware is unsupported even if the script can be adapted.
 
 ## Gaming
 
-The gaming profile adds Steam, 32-bit NVIDIA/Vulkan libraries, GameMode, MangoHud and NTSync. Normal desktop operation keeps adaptive CPU policy; GameMode may request the performance governor, best-effort I/O priority, and a session-scoped split-lock change only for participating games. No overclock, fixed GPU clocks, special gaming kernel, global mitigation disabling, or forced global overlay is installed.
+The gaming profile adds Steam, 32-bit NVIDIA/Vulkan libraries, GameMode, MangoHud and NTSync. Normal desktop operation keeps adaptive CPU policy; GameMode may request the performance governor and best-effort I/O priority only for participating games. Split-lock mitigation remains enabled (`disable_splitlock=0`). No overclock, fixed GPU clocks, special gaming kernel, global mitigation disabling, or forced global overlay is installed.
 
 ## Recovery
 
@@ -50,7 +54,7 @@ Both Arch `linux` and `linux-lts` are installed with matching NVIDIA open kernel
 
 ## Automated validation
 
-The current public baseline passes hosted GitHub CI with repository completeness, Bash syntax, ShellCheck 0.9.0, 68/68 tests, repository hygiene, and whitespace checks. The suite includes fail-closed stable sign-off, deterministic-asset regression coverage, adversarial input tests, and recovery-documentation checks. Physical validation remains separate and `NOT TESTED`.
+Public baseline `5b5453bcbc9d6e6ca175adf5c9fa737f050971a1` passed hosted GitHub CI with repository completeness, Bash syntax, ShellCheck 0.9.0, 74/74 tests, repository hygiene, and whitespace checks. The current pacman-preflight remediation expands local coverage to 90/90 and adds a separate current-Arch pacman integration job; that new hosted result is pending publication. The suite includes fail-closed stable sign-off, deterministic-asset regression coverage, adversarial input tests, and recovery-documentation checks. Physical validation remains separate and `NOT TESTED`.
 
 ## Known limitations
 
